@@ -86,7 +86,7 @@ export function FileViewer({ filePath, rpc, onClose }: Props) {
       case 'markdown':
         return <MarkdownViewer content={content} />;
       case 'pdf':
-        return <PDFViewer filePath={filePath} />;
+        return <PDFViewer filePath={filePath} rpc={rpc} />;
       case 'excel':
         return <ExcelViewer filePath={filePath} rpc={rpc} />;
       default:

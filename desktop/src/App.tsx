@@ -86,7 +86,7 @@ export default function App() {
               <button
                 key={item.id}
                 className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => { setActiveTab(item.id); setSelectedFile(null); }}
               >
                 <span style={{ fontWeight: 700, width: 16, textAlign: 'center' }}>{item.icon}</span>
                 {item.label}

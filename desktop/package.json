@@ -14,7 +14,7 @@
   "dependencies": {
     "@fortune-sheet/react": "^1.0.4",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "pdfjs-dist": "^5.4.624",
+    "pdfjs-dist": "^5.4.296",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
