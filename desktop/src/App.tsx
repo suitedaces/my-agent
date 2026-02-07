@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGateway } from './hooks/useGateway';
 import { ChatView } from './views/Chat';
 import { ChannelView } from './views/Channel';
@@ -19,11 +19,27 @@ const NAV_ITEMS: { id: NavTab; label: string; icon: string }[] = [
   { id: 'status', label: 'Status', icon: '?' },
 ];
 
+type SessionFilter = 'all' | 'desktop' | 'telegram' | 'whatsapp';
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('chat');
   const [showFiles, setShowFiles] = useState(true);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
   const gw = useGateway();
+
+  const filteredSessions = useMemo(() => {
+    if (sessionFilter === 'all') return gw.sessions;
+    return gw.sessions.filter(s => (s.channel || 'desktop') === sessionFilter);
+  }, [gw.sessions, sessionFilter]);
+
+  const handleViewSession = (sessionId: string, channel?: string, chatId?: string) => {
+    const sessionKey = channel && chatId
+      ? `${channel}:dm:${chatId}`
+      : 'desktop:dm:default';
+    gw.loadSession(sessionId, sessionKey);
+    setActiveTab('chat');
+  };
 
   const renderView = () => {
     if (selectedFile) {
@@ -34,9 +50,9 @@ export default function App() {
       case 'chat':
         return <ChatView gateway={gw} />;
       case 'whatsapp':
-        return <ChannelView channel="whatsapp" gateway={gw} />;
+        return <ChannelView channel="whatsapp" gateway={gw} onViewSession={handleViewSession} />;
       case 'telegram':
-        return <ChannelView channel="telegram" gateway={gw} />;
+        return <ChannelView channel="telegram" gateway={gw} onViewSession={handleViewSession} />;
       case 'automation':
         return <Automations gateway={gw} />;
       case 'tools':
@@ -44,6 +60,12 @@ export default function App() {
       case 'status':
         return <StatusView gateway={gw} />;
     }
+  };
+
+  const channelIcon = (ch?: string) => {
+    if (ch === 'telegram') return 'T';
+    if (ch === 'whatsapp') return 'W';
+    return '>';
   };
 
   return (
@@ -83,16 +105,31 @@ export default function App() {
 
           {gw.sessions.length > 0 && (
             <div className="sidebar-sessions">
-              <div className="nav-label">sessions</div>
-              {gw.sessions.slice(0, 20).map(s => (
+              <div className="nav-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                sessions
+                <select
+                  value={sessionFilter}
+                  onChange={e => setSessionFilter(e.target.value as SessionFilter)}
+                  style={{ fontSize: 9, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 2px', marginLeft: 'auto' }}
+                >
+                  <option value="all">all</option>
+                  <option value="desktop">desktop</option>
+                  <option value="telegram">telegram</option>
+                  <option value="whatsapp">whatsapp</option>
+                </select>
+              </div>
+              {filteredSessions.slice(0, 30).map(s => (
                 <button
                   key={s.id}
                   className={`nav-item session-item ${gw.currentSessionId === s.id ? 'active' : ''}`}
-                  onClick={() => { gw.loadSession(s.id); setActiveTab('chat'); }}
-                  title={`${s.messageCount} msgs — ${new Date(s.updatedAt).toLocaleString()}`}
+                  onClick={() => handleViewSession(s.id, s.channel, s.chatId)}
+                  title={`${s.channel || 'desktop'} | ${s.messageCount} msgs | ${new Date(s.updatedAt).toLocaleString()}`}
                 >
-                  <span style={{ fontSize: 10, opacity: 0.6 }}>{s.id.slice(8, 16)}</span>
-                  <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, width: 12, opacity: 0.5 }}>{channelIcon(s.channel)}</span>
+                  <span style={{ fontSize: 10, opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {s.senderName || s.chatId || s.id.slice(8, 16)}
+                  </span>
+                  <span style={{ fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}>
                     {new Date(s.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
                 </button>

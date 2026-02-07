@@ -10,6 +10,7 @@ export type TelegramMonitorOptions = {
   tokenFile?: string;
   accountId?: string;
   onMessage?: (msg: InboundMessage) => Promise<void>;
+  onCommand?: (cmd: string, chatId: string) => Promise<string | void>;
   abortSignal?: AbortSignal;
 };
 
@@ -32,6 +33,21 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
       await deleteTelegramMessage(bot.api, chatId, messageId);
     },
   });
+
+  // bot commands
+  if (opts.onCommand) {
+    const onCmd = opts.onCommand;
+    bot.command('new', async (ctx) => {
+      const chatId = String(ctx.chat.id);
+      const reply = await onCmd('new', chatId);
+      if (reply) await ctx.reply(reply);
+    });
+    bot.command('status', async (ctx) => {
+      const chatId = String(ctx.chat.id);
+      const reply = await onCmd('status', chatId);
+      if (reply) await ctx.reply(reply);
+    });
+  }
 
   // handle incoming text messages
   bot.on('message:text', async (ctx) => {

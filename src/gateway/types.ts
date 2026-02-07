@@ -65,6 +65,7 @@ export type RpcMethod =
   | 'sessions.list'
   | 'sessions.get'
   | 'sessions.delete'
+  | 'sessions.reset'
   | 'channels.status'
   | 'channels.start'
   | 'channels.stop'
@@ -78,7 +79,14 @@ export type RpcMethod =
   | 'skills.list'
   | 'config.get'
   | 'config.set'
-  | 'fs.list';
+  | 'fs.list'
+  | 'fs.read'
+  | 'fs.readBinary'
+  | 'fs.mkdir'
+  | 'fs.delete'
+  | 'fs.rename'
+  | 'fs.watch.start'
+  | 'fs.watch.stop';
 
 export type GatewayEventName =
   | 'agent.stream'

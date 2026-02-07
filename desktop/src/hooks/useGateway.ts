@@ -34,6 +34,10 @@ export type SessionInfo = {
   messageCount: number;
   createdAt: string;
   updatedAt: string;
+  channel?: string;
+  chatId?: string;
+  chatType?: string;
+  senderName?: string;
 };
 
 export type AskUserQuestion = {
@@ -178,6 +182,8 @@ export function useGateway(url = 'ws://localhost:18789') {
   const pendingRpcRef = useRef(new Map<number, PendingRpc>());
   const reconnectTimerRef = useRef<number | null>(null);
   const fsChangeListenersRef = useRef<Set<(path: string) => void>>(new Set());
+  // track which session key we're viewing - only show stream events for this key
+  const activeSessionKeyRef = useRef<string>('desktop:dm:default');
 
   const rpc = useCallback(async (method: string, params?: Record<string, unknown>): Promise<unknown> => {
     const ws = wsRef.current;
@@ -205,7 +211,8 @@ export function useGateway(url = 'ws://localhost:18789') {
 
     switch (name) {
       case 'agent.user_message': {
-        const d = data as { source: string; prompt: string; timestamp: number };
+        const d = data as { source: string; sessionKey?: string; prompt: string; timestamp: number };
+        if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         // desktop/chat already adds user item in sendMessage, skip to avoid dupes
         if (d.source !== 'desktop/chat') {
           setChatItems(prev => [...prev, {
@@ -219,13 +226,15 @@ export function useGateway(url = 'ws://localhost:18789') {
       }
 
       case 'agent.tool_use': {
-        const d = data as { source: string; tool: string; timestamp: number };
+        const d = data as { source: string; sessionKey?: string; tool: string; timestamp: number };
+        if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         setAgentStatus(`running ${d.tool}...`);
         break;
       }
 
       case 'agent.stream': {
-        const d = data as { source: string; event: Record<string, unknown>; timestamp: number };
+        const d = data as { source: string; sessionKey?: string; event: Record<string, unknown>; timestamp: number };
+        if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         const evt = d.event;
         if (!evt) break;
 
@@ -301,7 +310,15 @@ export function useGateway(url = 'ws://localhost:18789') {
       }
 
       case 'agent.result': {
-        const d = data as { sessionId: string; result: string; usage?: { totalCostUsd?: number } };
+        const d = data as { sessionKey?: string; sessionId: string; result: string; usage?: { totalCostUsd?: number } };
+        if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) {
+          // not our session, just refresh sessions list
+          rpc('sessions.list').then((res) => {
+            const arr = res as SessionInfo[];
+            if (Array.isArray(arr)) setSessions(arr);
+          }).catch(() => {});
+          break;
+        }
         setChatItems(prev => {
           const updated = prev.map(item =>
             'streaming' in item && item.streaming ? { ...item, streaming: false } : item
@@ -318,7 +335,8 @@ export function useGateway(url = 'ws://localhost:18789') {
       }
 
       case 'agent.error': {
-        const d = data as { error: string };
+        const d = data as { sessionKey?: string; error: string };
+        if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         setChatItems(prev => [...prev, {
           type: 'error',
           content: d.error,
@@ -336,7 +354,8 @@ export function useGateway(url = 'ws://localhost:18789') {
       }
 
       case 'agent.tool_result': {
-        const d = data as { tool_use_id: string; content: string; is_error?: boolean };
+        const d = data as { sessionKey?: string; tool_use_id: string; content: string; is_error?: boolean };
+        if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         setChatItems(prev => {
           let idx = -1;
           for (let i = prev.length - 1; i >= 0; i--) {
@@ -499,13 +518,15 @@ export function useGateway(url = 'ws://localhost:18789') {
     }
   }, [rpc]);
 
-  const loadSession = useCallback(async (sessionId: string) => {
+  const loadSession = useCallback(async (sessionId: string, sessionKey?: string) => {
     try {
       const res = await rpc('sessions.get', { sessionId }) as { sessionId: string; messages: SessionMessage[] };
       if (res?.messages) {
         const items = sessionMessagesToChatItems(res.messages);
         setChatItems(items);
         setCurrentSessionId(sessionId);
+        // set active session key for stream filtering
+        activeSessionKeyRef.current = sessionKey || 'desktop:dm:default';
         localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
       }
     } catch (err) {
@@ -530,6 +551,7 @@ export function useGateway(url = 'ws://localhost:18789') {
   const newSession = useCallback(() => {
     setCurrentSessionId(undefined);
     setChatItems([]);
+    activeSessionKeyRef.current = 'desktop:dm:default';
     localStorage.removeItem(SESSION_STORAGE_KEY);
   }, []);
 

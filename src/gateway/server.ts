@@ -95,8 +95,88 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     }
   };
 
-  const sessionRegistry = new SessionRegistry();
+  const registryPath = join(config.sessionDir, '_registry.json');
+  const sessionRegistry = new SessionRegistry(registryPath);
+  sessionRegistry.loadFromDisk();
   const fileSessionManager = new SessionManager(config);
+
+  const IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4h
+  // status messages sent to channels while agent is working
+  const statusMessages = new Map<string, { channel: string; chatId: string; messageId: string }>();
+  // queued messages for sessions with active runs
+  const pendingMessages = new Map<string, InboundMessage[]>();
+
+  // process a channel message (or batched messages) through the agent
+  async function processChannelMessage(msg: InboundMessage, batchedBodies?: string[]) {
+    const session = sessionRegistry.getOrCreate({
+      channel: msg.channel,
+      chatType: msg.chatType,
+      chatId: msg.chatId,
+    });
+
+    // update metadata index
+    fileSessionManager.setMetadata(session.sessionId, {
+      channel: msg.channel,
+      chatId: msg.chatId,
+      chatType: msg.chatType,
+      senderName: msg.senderName,
+    });
+
+    // send status message to channel
+    const handler = getChannelHandler(msg.channel);
+    let statusMsgId: string | undefined;
+    if (handler) {
+      try {
+        const sent = await handler.send(msg.chatId, 'thinking...');
+        statusMsgId = sent.id;
+        statusMessages.set(session.key, { channel: msg.channel, chatId: msg.chatId, messageId: sent.id });
+      } catch {}
+    }
+
+    const body = batchedBodies
+      ? `Multiple messages:\n${batchedBodies.map((b, i) => `${i + 1}. ${b}`).join('\n')}`
+      : msg.body;
+
+    const channelPrompt = [
+      `[Incoming ${msg.channel} message from ${msg.senderName || msg.senderId} in chat ${msg.chatId}]`,
+      body,
+    ].join('\n');
+
+    const result = await handleAgentRun({
+      prompt: channelPrompt,
+      sessionKey: session.key,
+      source: `${msg.channel}/${msg.chatId}`,
+      channel: msg.channel,
+    });
+
+    // edit status message with final response
+    if (handler && statusMsgId && result?.result && result.result.trim() !== 'SILENT_REPLY') {
+      try {
+        if (!result.usedMessageTool) {
+          await handler.edit(statusMsgId, result.result, msg.chatId);
+        } else {
+          // agent already sent via message tool, delete the status message
+          await handler.delete(statusMsgId, msg.chatId);
+        }
+      } catch {
+        // edit failed (too old?), send new message if agent didn't already
+        if (!result.usedMessageTool) {
+          try { await handler.send(msg.chatId, result.result); } catch {}
+        }
+      }
+    }
+    statusMessages.delete(session.key);
+
+    // process any queued messages
+    const queued = pendingMessages.get(session.key);
+    if (queued && queued.length > 0) {
+      const bodies = queued.map(m => m.body);
+      pendingMessages.delete(session.key);
+      // use the last message as the "main" message for metadata
+      const lastMsg = queued[queued.length - 1];
+      await processChannelMessage(lastMsg, bodies);
+    }
+  }
 
   // channel manager handles incoming messages from whatsapp/telegram
   const channelManager = new ChannelManager({
@@ -104,57 +184,68 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     onMessage: async (msg: InboundMessage) => {
       broadcast({ event: 'channel.message', data: msg });
 
-      // route to agent
-      const session = sessionRegistry.getOrCreate({
+      if (msg.channel === 'desktop') {
+        // desktop handled via chat.send RPC, not here
+        return;
+      }
+
+      let session = sessionRegistry.getOrCreate({
         channel: msg.channel,
         chatType: msg.chatType,
         chatId: msg.chatId,
       });
+
+      // idle timeout: reset session if too long since last message
+      const gap = Date.now() - session.lastMessageAt;
+      if (session.messageCount > 0 && gap > IDLE_TIMEOUT_MS) {
+        console.log(`[gateway] idle timeout for ${session.key} (${Math.floor(gap / 3600000)}h), starting new session`);
+        sessionRegistry.remove(session.key);
+        session = sessionRegistry.getOrCreate({
+          channel: msg.channel,
+          chatType: msg.chatType,
+          chatId: msg.chatId,
+        });
+      }
+
       sessionRegistry.incrementMessages(session.key);
 
-      // wrap prompt with channel context
-      const channelPrompt = [
-        `[Incoming ${msg.channel} message from ${msg.senderName || msg.senderId} in chat ${msg.chatId}]`,
-        msg.body,
-      ].join('\n');
+      // if agent is already running for this chat, queue the message
+      if (session.activeRun) {
+        const queue = pendingMessages.get(session.key) || [];
+        queue.push(msg);
+        pendingMessages.set(session.key, queue);
 
-      // for messaging channels, pass chatId as extra context
-      const extraContext = ['whatsapp', 'telegram'].includes(msg.channel)
-        ? `Reply using: message({ action: 'send', channel: '${msg.channel}', target: '${msg.chatId}', message: 'your reply' })`
-        : undefined;
-
-      const result = await handleAgentRun({
-        prompt: channelPrompt,
-        sessionKey: session.key,
-        source: `${msg.channel}/${msg.chatId}`,
-        channel: msg.channel,
-        extraContext,
-      });
-
-      // messaging channels: agent controls sending via message tool
-      // desktop: auto-send for simple chat UX
-      if (msg.channel === 'desktop') {
-        // desktop: always auto-send (unless SILENT_REPLY)
-        if (result?.result && result.result.trim() !== 'SILENT_REPLY') {
-          const handler = getChannelHandler(msg.channel);
-          if (handler) {
-            try {
-              await handler.send(msg.chatId, result.result);
-              console.log(`[gateway] desktop reply sent: chatId=${msg.chatId}`);
-            } catch (err) {
-              console.error(`[gateway] desktop reply failed:`, err);
-            }
-          }
+        // notify user
+        const handler = getChannelHandler(msg.channel);
+        if (handler) {
+          try { await handler.send(msg.chatId, 'got it, I\'ll get to this after I\'m done'); } catch {}
         }
-      } else {
-        // whatsapp/telegram: agent uses message tool (no auto-send)
-        if (result?.result?.trim() === 'SILENT_REPLY') {
-          console.log(`[gateway] silent reply: channel=${msg.channel} chatId=${msg.chatId}`);
-        } else if (!result?.usedMessageTool && result?.result) {
-          console.warn(`[gateway] agent didn't use message tool: channel=${msg.channel} chatId=${msg.chatId} - message not sent`);
-        } else if (result?.usedMessageTool) {
-          console.log(`[gateway] agent handled send via message tool: channel=${msg.channel} chatId=${msg.chatId}`);
-        }
+        return;
+      }
+
+      await processChannelMessage(msg);
+    },
+    onCommand: async (channel, cmd, chatId) => {
+      const chatType = 'dm';
+      const key = sessionRegistry.makeKey({ channel, chatType, chatId });
+
+      if (cmd === 'new') {
+        const old = sessionRegistry.get(key);
+        sessionRegistry.remove(key);
+        return `session reset. ${old ? `old: ${old.messageCount} messages.` : ''} new session started.`;
+      }
+
+      if (cmd === 'status') {
+        const session = sessionRegistry.get(key);
+        if (!session) return 'no active session for this chat.';
+        const age = Date.now() - session.lastMessageAt;
+        const ageMin = Math.floor(age / 60000);
+        return [
+          `session: ${session.sessionId.slice(0, 30)}`,
+          `messages: ${session.messageCount}`,
+          `last activity: ${ageMin}m ago`,
+          `active: ${session.activeRun ? 'yes' : 'no'}`,
+        ].join('\n');
       }
     },
     onStatus: (status) => {
@@ -264,30 +355,27 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     const { prompt, sessionKey, source, channel, extraContext } = params;
     console.log(`[gateway] agent run: source=${source} sessionKey=${sessionKey} prompt="${prompt.slice(0, 80)}..."`);
 
-    // queue runs per session
     const prev = runQueues.get(sessionKey) || Promise.resolve();
     let result: AgentResult | null = null;
 
     const run = prev.then(async () => {
       sessionRegistry.setActiveRun(sessionKey, true);
-      broadcast({ event: 'status.update', data: { activeRun: true, source } });
-      broadcast({ event: 'agent.user_message', data: { source, prompt, timestamp: Date.now() } });
+      broadcast({ event: 'status.update', data: { activeRun: true, source, sessionKey } });
+      broadcast({ event: 'agent.user_message', data: { source, sessionKey, prompt, timestamp: Date.now() } });
       const runStart = Date.now();
 
       try {
-        // look up real SDK session ID for resume (undefined on first run)
-        const sdkResumeId = sessionRegistry.get(sessionKey)?.sdkSessionId;
-
+        const session = sessionRegistry.get(sessionKey);
         const gen = streamAgent({
           prompt,
-          sessionId: sdkResumeId,
+          sessionId: session?.sessionId,
+          resumeId: session?.sdkSessionId,
           config,
           channel,
           extraContext,
           canUseTool,
         });
 
-        // track result from stream (for-await-of doesn't capture generator return value)
         let agentText = '';
         let agentSessionId = '';
         let agentUsage = { inputTokens: 0, outputTokens: 0, totalCostUsd: 0 };
@@ -296,32 +384,33 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         for await (const msg of gen) {
           const m = msg as Record<string, unknown>;
 
-          // capture real SDK session ID from init message
           if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
             agentSessionId = m.session_id as string;
             sessionRegistry.setSdkSessionId(sessionKey, agentSessionId);
+            fileSessionManager.setMetadata(session?.sessionId || '', { sdkSessionId: agentSessionId });
           }
 
-          // broadcast stream events to ws clients
           if (m.type === 'stream_event') {
             const event = m.event as Record<string, unknown>;
             broadcast({
               event: 'agent.stream',
-              data: { source, event, timestamp: Date.now() },
+              data: { source, sessionKey, event, timestamp: Date.now() },
             });
 
-            // detect tool use
             if (event.type === 'content_block_start') {
               const cb = event.content_block as Record<string, unknown>;
               if (cb?.type === 'tool_use') {
-                // track if message tool was used
-                if (cb.name === 'message') {
-                  usedMessageTool = true;
-                }
+                if (cb.name === 'message') usedMessageTool = true;
                 broadcast({
                   event: 'agent.tool_use',
-                  data: { source, tool: cb.name, timestamp: Date.now() },
+                  data: { source, sessionKey, tool: cb.name, timestamp: Date.now() },
                 });
+                // update status message in channel
+                const sm = statusMessages.get(sessionKey);
+                if (sm) {
+                  const h = getChannelHandler(sm.channel);
+                  if (h) { try { await h.edit(sm.messageId, `running ${cb.name as string}...`, sm.chatId); } catch {} }
+                }
               }
             }
           }
@@ -329,9 +418,8 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (m.type === 'assistant') {
             broadcast({
               event: 'agent.message',
-              data: { source, message: m, timestamp: Date.now() },
+              data: { source, sessionKey, message: m, timestamp: Date.now() },
             });
-            // extract text from assistant message
             const assistantMsg = m.message as Record<string, unknown>;
             const content = assistantMsg?.content as unknown[];
             if (Array.isArray(content)) {
@@ -342,7 +430,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             }
           }
 
-          // tool results come as SDK user messages with tool_use_result or tool_result content blocks
           if (m.type === 'user') {
             const userMsg = (m as any).message;
             const content = userMsg?.content;
@@ -362,6 +449,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
                     event: 'agent.tool_result',
                     data: {
                       source,
+                      sessionKey,
                       tool_use_id: block.tool_use_id,
                       content: resultText.slice(0, 2000),
                       is_error: block.is_error || false,
@@ -399,6 +487,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           event: 'agent.result',
           data: {
             source,
+            sessionKey,
             sessionId: result.sessionId,
             result: result.result,
             usage: result.usage,
@@ -409,11 +498,11 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         console.error(`[gateway] agent error: source=${source}`, err);
         broadcast({
           event: 'agent.error',
-          data: { source, error: err instanceof Error ? err.message : String(err), timestamp: Date.now() },
+          data: { source, sessionKey, error: err instanceof Error ? err.message : String(err), timestamp: Date.now() },
         });
       } finally {
         sessionRegistry.setActiveRun(sessionKey, false);
-        broadcast({ event: 'status.update', data: { activeRun: false, source } });
+        broadcast({ event: 'status.update', data: { activeRun: false, source, sessionKey } });
       }
     });
 
@@ -455,24 +544,21 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           const prompt = params?.prompt as string;
           if (!prompt) return { id, error: 'prompt required' };
 
-          // desktop always uses a single session key - the SDK session ID is
-          // tracked separately in sessionRegistry.sdkSessionId for resume
           const sessionKey = 'desktop:dm:default';
-
           const session = sessionRegistry.getOrCreate({
             channel: 'desktop',
             chatId: 'default',
           });
           sessionRegistry.incrementMessages(session.key);
+          fileSessionManager.setMetadata(session.sessionId, { channel: 'desktop', chatId: 'default', chatType: 'dm' });
 
-          // run async, respond immediately
           handleAgentRun({
             prompt,
             sessionKey,
             source: 'desktop/chat',
           });
 
-          return { id, result: { sessionKey, sessionId: session.sdkSessionId, queued: true } };
+          return { id, result: { sessionKey, sessionId: session.sessionId, queued: true } };
         }
 
         case 'chat.answerQuestion': {
@@ -511,6 +597,15 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (!sessionId) return { id, error: 'sessionId required' };
           const deleted = fileSessionManager.delete(sessionId);
           return { id, result: { deleted } };
+        }
+
+        case 'sessions.reset': {
+          const channel = params?.channel as string;
+          const chatId = params?.chatId as string;
+          if (!channel || !chatId) return { id, error: 'channel and chatId required' };
+          const key = sessionRegistry.makeKey({ channel, chatId });
+          sessionRegistry.remove(key);
+          return { id, result: { reset: true, key } };
         }
 
         case 'channels.status': {

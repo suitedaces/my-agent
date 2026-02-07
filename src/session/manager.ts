@@ -2,12 +2,24 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSy
 import { join, basename } from 'node:path';
 import type { Config } from '../config.js';
 
+export type SessionMetadata = {
+  channel?: string;
+  chatId?: string;
+  chatType?: string;
+  senderName?: string;
+  sdkSessionId?: string;
+};
+
 export type SessionInfo = {
   id: string;
   createdAt: string;
   updatedAt: string;
   messageCount: number;
   path: string;
+  channel?: string;
+  chatId?: string;
+  chatType?: string;
+  senderName?: string;
 };
 
 export type SessionMessage = {
@@ -19,9 +31,12 @@ export type SessionMessage = {
 
 export class SessionManager {
   private sessionDir: string;
+  private indexPath: string;
+  private indexCache: Record<string, SessionMetadata> | null = null;
 
   constructor(config: Config) {
     this.sessionDir = config.sessionDir;
+    this.indexPath = join(this.sessionDir, '_index.json');
     this.ensureDir();
   }
 
@@ -33,6 +48,33 @@ export class SessionManager {
 
   private getSessionPath(sessionId: string): string {
     return join(this.sessionDir, `${sessionId}.jsonl`);
+  }
+
+  loadIndex(): Record<string, SessionMetadata> {
+    if (this.indexCache) return this.indexCache;
+    try {
+      if (existsSync(this.indexPath)) {
+        this.indexCache = JSON.parse(readFileSync(this.indexPath, 'utf-8'));
+        return this.indexCache!;
+      }
+    } catch {}
+    this.indexCache = {};
+    return this.indexCache;
+  }
+
+  saveIndex(index: Record<string, SessionMetadata>): void {
+    this.indexCache = index;
+    writeFileSync(this.indexPath, JSON.stringify(index, null, 2));
+  }
+
+  setMetadata(sessionId: string, meta: Partial<SessionMetadata>): void {
+    const index = this.loadIndex();
+    index[sessionId] = { ...index[sessionId], ...meta };
+    this.saveIndex(index);
+  }
+
+  getMetadata(sessionId: string): SessionMetadata | undefined {
+    return this.loadIndex()[sessionId];
   }
 
   generateSessionId(): string {
@@ -85,10 +127,13 @@ export class SessionManager {
     const files = readdirSync(this.sessionDir)
       .filter(f => f.endsWith('.jsonl'));
 
+    const index = this.loadIndex();
+
     return files.map(file => {
       const path = join(this.sessionDir, file);
       const stat = statSync(path);
       const id = basename(file, '.jsonl');
+      const meta = index[id];
 
       const content = readFileSync(path, 'utf-8');
       const lines = content.split('\n').filter(l => l.trim());
@@ -99,6 +144,10 @@ export class SessionManager {
         updatedAt: stat.mtime.toISOString(),
         messageCount: lines.length,
         path,
+        channel: meta?.channel,
+        chatId: meta?.chatId,
+        chatType: meta?.chatType,
+        senderName: meta?.senderName,
       };
     }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }

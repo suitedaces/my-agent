@@ -30,6 +30,7 @@ function cleanEnvForSdk(): Record<string, string> {
 export type AgentOptions = {
   prompt: string;
   sessionId?: string;
+  resumeId?: string;
   config: Config;
   channel?: string;
   timezone?: string;
@@ -58,7 +59,8 @@ export type AgentResult = {
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const {
     prompt,
-    sessionId: resumeSessionId,
+    sessionId: providedSessionId,
+    resumeId,
     config,
     channel,
     timezone,
@@ -73,8 +75,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const startTime = Date.now();
   const sessionManager = new SessionManager(config);
 
-  // generate or use existing session ID
-  const sessionId = resumeSessionId || sessionManager.generateSessionId();
+  const sessionId = providedSessionId || sessionManager.generateSessionId();
 
   // load eligible skills
   const skills = getEligibleSkills(config);
@@ -119,7 +120,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     : defaultHooks;
 
   // run query
-  console.log(`[agent] runAgent starting: model=${config.model} permissionMode=${config.permissionMode} sessionId=${sessionId}`);
+  console.log(`[agent] runAgent starting: model=${config.model} permissionMode=${config.permissionMode} sessionId=${sessionId} resumeId=${resumeId || 'none'}`);
   const q = query({
     prompt: enhancedPrompt,
     options: {
@@ -129,7 +130,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       agents: agents as any,
       hooks: hooks as any,
       mcpServers: { 'my-agent-tools': mcpServer } as any,
-      resume: resumeSessionId,
+      resume: resumeId,
       permissionMode: config.permissionMode as any,
       allowDangerouslySkipPermissions: config.permissionMode === 'bypassPermissions',
       sandbox: config.sandbox as any,
@@ -152,8 +153,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   };
   let usedMessageTool = false;
 
-  // store user message only for new sessions (resume replays history)
-  if (!resumeSessionId) {
+  // store user message only for new runs (resume replays history)
+  if (!resumeId) {
     const userMsg: SessionMessage = {
       type: 'user',
       timestamp: new Date().toISOString(),
@@ -227,7 +228,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, AgentResult, unknown> {
   const {
     prompt,
-    sessionId: resumeSessionId,
+    sessionId: providedSessionId,
+    resumeId,
     config,
     channel,
     timezone,
@@ -238,7 +240,7 @@ export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, 
 
   const startTime = Date.now();
   const sessionManager = new SessionManager(config);
-  const sessionId = resumeSessionId || sessionManager.generateSessionId();
+  const sessionId = providedSessionId || sessionManager.generateSessionId();
 
   const skills = getEligibleSkills(config);
   const matchedSkill = matchSkillToPrompt(prompt, skills);
@@ -273,7 +275,7 @@ export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, 
     ? mergeHooks(defaultHooks, customHooks)
     : defaultHooks;
 
-  console.log(`[agent] streamAgent starting: model=${config.model} permissionMode=${config.permissionMode} sessionId=${sessionId}`);
+  console.log(`[agent] streamAgent starting: model=${config.model} permissionMode=${config.permissionMode} sessionId=${sessionId} resumeId=${resumeId || 'none'}`);
   const q = query({
     prompt: enhancedPrompt,
     options: {
@@ -283,7 +285,7 @@ export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, 
       agents,
       hooks: hooks as any,
       mcpServers: { 'my-agent-tools': mcpServer },
-      resume: resumeSessionId,
+      resume: resumeId,
       permissionMode: config.permissionMode,
       allowDangerouslySkipPermissions: config.permissionMode === 'bypassPermissions',
       sandbox: config.sandbox,
@@ -301,8 +303,7 @@ export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, 
   let usage = { inputTokens: 0, outputTokens: 0, totalCostUsd: 0 };
   let usedMessageTool = false;
 
-  // store user message only for new sessions (resume replays history)
-  if (!resumeSessionId) {
+  if (!resumeId) {
     const userMsg: SessionMessage = {
       type: 'user',
       timestamp: new Date().toISOString(),

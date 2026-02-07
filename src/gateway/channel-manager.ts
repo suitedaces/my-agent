@@ -6,6 +6,7 @@ import { startTelegramMonitor } from '../channels/telegram/monitor.js';
 export type ChannelManagerOptions = {
   config: Config;
   onMessage: (msg: InboundMessage) => Promise<void>;
+  onCommand?: (channel: string, cmd: string, chatId: string) => Promise<string | void>;
   onStatus?: (status: ChannelStatus) => void;
 };
 
@@ -24,9 +25,12 @@ export class ChannelManager {
   private onStatus?: (status: ChannelStatus) => void;
   private channels = new Map<string, ChannelState>();
 
+  private onCommand?: (channel: string, cmd: string, chatId: string) => Promise<string | void>;
+
   constructor(opts: ChannelManagerOptions) {
     this.config = opts.config;
     this.onMessage = opts.onMessage;
+    this.onCommand = opts.onCommand;
     this.onStatus = opts.onStatus;
   }
 
@@ -106,6 +110,9 @@ export class ChannelManager {
         state.lastError = null;
         await this.onMessage(msg);
       },
+      onCommand: this.onCommand
+        ? async (cmd, chatId) => this.onCommand!('telegram', cmd, chatId)
+        : undefined,
     });
 
     state.connected = true;
