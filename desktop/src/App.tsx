@@ -3,17 +3,19 @@ import { useGateway } from './hooks/useGateway';
 import { ChatView } from './views/Chat';
 import { ChannelView } from './views/Channel';
 import { Automations } from './components/Automations';
+import { ToolsView } from './views/Tools';
 import { FileExplorer } from './components/FileExplorer';
 import { FileViewer } from './components/FileViewer';
 import { StatusView } from './views/Status';
 
-type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'status';
+type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'tools' | 'status';
 
 const NAV_ITEMS: { id: NavTab; label: string; icon: string }[] = [
   { id: 'chat', label: 'Chat', icon: '>' },
   { id: 'whatsapp', label: 'WhatsApp', icon: 'W' },
   { id: 'telegram', label: 'Telegram', icon: 'T' },
   { id: 'automation', label: 'Auto', icon: '*' },
+  { id: 'tools', label: 'Tools', icon: '🔧' },
   { id: 'status', label: 'Status', icon: '?' },
 ];
 
@@ -37,6 +39,8 @@ export default function App() {
         return <ChannelView channel="telegram" gateway={gw} />;
       case 'automation':
         return <Automations gateway={gw} />;
+      case 'tools':
+        return <ToolsView gateway={gw} />;
       case 'status':
         return <StatusView gateway={gw} />;
     }

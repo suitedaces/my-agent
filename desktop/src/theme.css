@@ -1104,3 +1104,198 @@ input, textarea, select, button {
   color: var(--accent-red);
 }
 
+/* automations view */
+.auto-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.auto-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.auto-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.auto-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.auto-form {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.auto-form-row {
+  margin-bottom: 10px;
+}
+
+.auto-form-row:last-child {
+  margin-bottom: 0;
+}
+
+.auto-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.auto-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.auto-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.auto-input::placeholder {
+  color: var(--text-muted);
+}
+
+.auto-textarea {
+  resize: none;
+  min-height: 60px;
+}
+
+.auto-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  display: block;
+}
+
+.auto-type-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.auto-type-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.auto-type-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.auto-type-btn.active {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+}
+
+.auto-submit {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.auto-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auto-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.auto-job {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.auto-job-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.auto-job-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.auto-job-name {
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.auto-job-schedule {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auto-job-detail {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.auto-job-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 8px;
+}
+
+.auto-job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.auto-job-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.auto-btn-danger {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
+.auto-btn-danger:hover {
+  background: rgba(248, 81, 73, 0.15);
+}
+
