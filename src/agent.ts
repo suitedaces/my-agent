@@ -41,6 +41,7 @@ export type AgentOptions = {
   onToolResult?: (tool: string, result: unknown) => void;
   hooks?: Partial<Record<HookEvent, HookCallbackMatcher[]>>;
   canUseTool?: (toolName: string, input: Record<string, unknown>, options: unknown) => Promise<unknown>;
+  abortController?: AbortController;
 };
 
 export type AgentResult = {
@@ -294,6 +295,7 @@ export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, 
       maxTurns: 50,
       includePartialMessages: true,
       canUseTool: opts.canUseTool as any,
+      abortController: opts.abortController,
       stderr: (data: string) => console.error(`[agent:stderr] ${data.trimEnd()}`),
     },
   });

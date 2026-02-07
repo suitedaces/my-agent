@@ -76,6 +76,8 @@ export class ChannelManager {
     const stop = await startWhatsAppMonitor({
       authDir: waConfig.authDir,
       accountId: waConfig.accountId,
+      allowFrom: waConfig.allowFrom,
+      groupPolicy: waConfig.groupPolicy,
       onMessage: async (raw) => {
         const msg = raw as InboundMessage;
         state.connected = true;
@@ -101,9 +103,10 @@ export class ChannelManager {
     this.emitStatus(state);
 
     const stop = await startTelegramMonitor({
-      botToken: tgConfig.botToken,
       tokenFile: tgConfig.tokenFile,
       accountId: tgConfig.accountId,
+      allowFrom: tgConfig.allowFrom,
+      groupPolicy: tgConfig.groupPolicy,
       onMessage: async (raw) => {
         const msg = raw as InboundMessage;
         state.connected = true;

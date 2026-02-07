@@ -7,6 +7,8 @@ import type { InboundMessage } from '../types.js';
 export type WhatsAppMonitorOptions = {
   authDir?: string;
   accountId?: string;
+  allowFrom?: string[];
+  groupPolicy?: 'open' | 'allowlist' | 'disabled';
   onMessage?: (msg: InboundMessage) => Promise<void>;
   abortSignal?: AbortSignal;
 };
@@ -76,6 +78,21 @@ export async function startWhatsAppMonitor(opts: WhatsAppMonitorOptions): Promis
           const senderId = isGroup
             ? (msg.key.participant || remoteJid)
             : remoteJid;
+
+          // group policy check
+          if (isGroup && opts.groupPolicy === 'disabled') continue;
+
+          // sender auth check — compare phone number (strip @s.whatsapp.net)
+          const senderPhone = senderId.split('@')[0];
+          if (opts.allowFrom && opts.allowFrom.length > 0) {
+            if (!opts.allowFrom.includes(senderPhone)) {
+              console.log(`[whatsapp] unauthorized sender: ${senderPhone} (${msg.pushName || 'unknown'})`);
+              continue;
+            }
+          } else if (opts.allowFrom && opts.allowFrom.length === 0) {
+            console.log('[whatsapp] no authorized senders configured, rejecting all messages');
+            continue;
+          }
 
           const inbound: InboundMessage = {
             id: msg.key.id || `wa-${Date.now()}`,

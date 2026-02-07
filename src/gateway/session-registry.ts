@@ -47,7 +47,8 @@ export class SessionRegistry {
   }
 
   makeKey(msg: { channel: string; chatType?: string; chatId: string }): string {
-    return `${msg.channel}:${msg.chatType || 'dm'}:${msg.chatId}`;
+    const sanitizedChatId = msg.chatId.replace(/[\/\\\.]+/g, '_').replace(/^_+|_+$/g, '');
+    return `${msg.channel}:${msg.chatType || 'dm'}:${sanitizedChatId}`;
   }
 
   getOrCreate(msg: { channel: string; chatType?: string; chatId: string; sessionId?: string }): SessionInfo {

@@ -1,6 +1,8 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+
+let loadedConfigPath: string | undefined;
 
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
 
@@ -59,7 +61,7 @@ export type TelegramChannelConfig = {
   accountId?: string;
   dmPolicy?: 'open' | 'allowlist';
   groupPolicy?: 'open' | 'allowlist' | 'disabled';
-  allowFrom?: (string | number)[];
+  allowFrom?: string[];
 };
 
 export type ChannelsConfig = {
@@ -71,6 +73,8 @@ export type GatewayConfig = {
   port?: number;
   host?: string;
   enabled?: boolean;
+  allowedPaths?: string[];
+  deniedPaths?: string[];
 };
 
 export type BrowserConfig = {
@@ -79,6 +83,10 @@ export type BrowserConfig = {
   cdpPort?: number;
   profileDir?: string;
   headless?: boolean;
+};
+
+export type SecurityConfig = {
+  approvalMode?: 'approve-sensitive' | 'autonomous' | 'lockdown';
 };
 
 export type Config = {
@@ -97,6 +105,7 @@ export type Config = {
   channels?: ChannelsConfig;
   gateway?: GatewayConfig;
   browser?: BrowserConfig;
+  security?: SecurityConfig;
   sessionDir: string;
   cwd: string;
 };
@@ -134,6 +143,7 @@ export async function loadConfig(configPath?: string): Promise<Config> {
       try {
         const content = readFileSync(p, 'utf-8');
         const userConfig = JSON.parse(content);
+        loadedConfigPath = p;
         return mergeConfig(DEFAULT_CONFIG, userConfig);
       } catch {
         // ignore parse errors, use defaults
@@ -165,4 +175,40 @@ function mergeConfig(base: Config, override: Partial<Config>): Config {
 
 export function getConfigValue<K extends keyof Config>(config: Config, key: K): Config[K] {
   return config[key];
+}
+
+export function getConfigPath(): string {
+  return loadedConfigPath || join(homedir(), '.my-agent', 'config.json');
+}
+
+export function saveConfig(config: Config): void {
+  const configPath = getConfigPath();
+  const dir = dirname(configPath);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+}
+
+export const ALWAYS_DENIED = [
+  '~/.ssh',
+  '~/.gnupg',
+  '~/.aws',
+  '~/.my-agent/whatsapp/auth',
+  '~/.my-agent/gateway-token',
+  '~/.config/nanoclaw',
+];
+
+export function isPathAllowed(targetPath: string, config: Config): boolean {
+  const home = homedir();
+  let resolved: string;
+  try {
+    resolved = realpathSync(targetPath);
+  } catch {
+    resolved = resolve(targetPath);
+  }
+
+  const denied = (config.gateway?.deniedPaths || ALWAYS_DENIED).map(p => resolve(p.replace(/^~/, home)));
+  if (denied.some(d => resolved.startsWith(d))) return false;
+
+  const allowed = (config.gateway?.allowedPaths || [home, '/tmp']).map(p => resolve(p.replace(/^~/, home)));
+  return allowed.some(a => resolved.startsWith(a));
 }

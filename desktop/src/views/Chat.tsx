@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import type { useGateway, ChatItem, AskUserQuestion } from '../hooks/useGateway';
+import { ApprovalCard } from '../components/ApprovalCard';
 
 type Props = {
   gateway: ReturnType<typeof useGateway>;
@@ -201,6 +202,7 @@ export function ChatView({ gateway }: Props) {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isRunning = gateway.agentStatus !== 'idle';
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -314,6 +316,19 @@ export function ChatView({ gateway }: Props) {
         />
       )}
 
+      {gateway.pendingApprovals.length > 0 && (
+        <div style={{ padding: '8px 16px 0', flexShrink: 0 }}>
+          {gateway.pendingApprovals.map(a => (
+            <ApprovalCard
+              key={a.requestId}
+              approval={a}
+              onApprove={gateway.approveToolUse}
+              onDeny={gateway.denyToolUse}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="chat-input-area">
         <div className="chat-input-wrapper">
           <textarea
@@ -326,13 +341,23 @@ export function ChatView({ gateway }: Props) {
             disabled={gateway.connectionState !== 'connected'}
             rows={1}
           />
-          <button
-            className="chat-send-btn"
-            onClick={handleSend}
-            disabled={!input.trim() || sending || gateway.connectionState !== 'connected'}
-          >
-            send
-          </button>
+          {isRunning ? (
+            <button
+              className="chat-send-btn"
+              onClick={gateway.abortAgent}
+              style={{ background: 'var(--accent-red)', color: '#fff' }}
+            >
+              stop
+            </button>
+          ) : (
+            <button
+              className="chat-send-btn"
+              onClick={handleSend}
+              disabled={!input.trim() || sending || gateway.connectionState !== 'connected'}
+            >
+              send
+            </button>
+          )}
         </div>
       </div>
     </div>

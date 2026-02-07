@@ -29,6 +29,10 @@ export type SessionMessage = {
   content: unknown;
 };
 
+function sanitizeSessionId(id: string): string {
+  return id.replace(/[\/\\\.]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
 export class SessionManager {
   private sessionDir: string;
   private indexPath: string;
@@ -47,7 +51,8 @@ export class SessionManager {
   }
 
   private getSessionPath(sessionId: string): string {
-    return join(this.sessionDir, `${sessionId}.jsonl`);
+    const safe = sanitizeSessionId(sessionId);
+    return join(this.sessionDir, `${safe}.jsonl`);
   }
 
   loadIndex(): Record<string, SessionMetadata> {

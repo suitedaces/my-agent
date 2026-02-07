@@ -7,6 +7,7 @@ import { ToolsView } from './views/Tools';
 import { FileExplorer } from './components/FileExplorer';
 import { FileViewer } from './components/FileViewer';
 import { StatusView } from './views/Status';
+import { ToolNotifications } from './components/ToolNotification';
 
 type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'tools' | 'status';
 
@@ -70,6 +71,7 @@ export default function App() {
 
   return (
     <>
+      <ToolNotifications notifications={gw.notifications} />
       <div className="titlebar">
         <span className="titlebar-title">my-agent</span>
         <select

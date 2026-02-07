@@ -9,13 +9,15 @@ export type TelegramMonitorOptions = {
   botToken?: string;
   tokenFile?: string;
   accountId?: string;
+  allowFrom?: string[];
+  groupPolicy?: 'open' | 'allowlist' | 'disabled';
   onMessage?: (msg: InboundMessage) => Promise<void>;
   onCommand?: (cmd: string, chatId: string) => Promise<string | void>;
   abortSignal?: AbortSignal;
 };
 
 export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promise<() => Promise<void>> {
-  const token = resolveTelegramToken(opts.botToken, opts.tokenFile);
+  const token = resolveTelegramToken(opts.tokenFile);
   const bot: Bot = createTelegramBot({ token });
 
   // register channel handler for the message tool
@@ -41,11 +43,15 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
   if (opts.onCommand) {
     const onCmd = opts.onCommand;
     bot.command('new', async (ctx) => {
+      const senderId = String(ctx.from?.id || '');
+      if (opts.allowFrom && opts.allowFrom.length > 0 && !opts.allowFrom.includes(senderId)) return;
       const chatId = String(ctx.chat.id);
       const reply = await onCmd('new', chatId);
       if (reply) await ctx.reply(reply);
     });
     bot.command('status', async (ctx) => {
+      const senderId = String(ctx.from?.id || '');
+      if (opts.allowFrom && opts.allowFrom.length > 0 && !opts.allowFrom.includes(senderId)) return;
       const chatId = String(ctx.chat.id);
       const reply = await onCmd('status', chatId);
       if (reply) await ctx.reply(reply);
@@ -59,6 +65,21 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
     const msg = ctx.message;
     const chat = msg.chat;
     const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+
+    // group policy check
+    if (isGroup && opts.groupPolicy === 'disabled') return;
+
+    // sender auth check
+    const senderId = String(msg.from?.id || '');
+    if (opts.allowFrom && opts.allowFrom.length > 0) {
+      if (!opts.allowFrom.includes(senderId)) {
+        console.log(`[telegram] unauthorized sender: ${senderId} (${msg.from?.first_name || 'unknown'})`);
+        return;
+      }
+    } else if (opts.allowFrom && opts.allowFrom.length === 0) {
+      console.log('[telegram] no authorized senders configured, rejecting all messages');
+      return;
+    }
 
     const inbound: InboundMessage = {
       id: String(msg.message_id),

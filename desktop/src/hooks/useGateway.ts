@@ -68,6 +68,21 @@ export type AskUserQuestion = {
   }>;
 };
 
+export type ToolApproval = {
+  requestId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  tier: string;
+  timestamp: number;
+};
+
+export type ToolNotification = {
+  toolName: string;
+  input: Record<string, unknown>;
+  tier: string;
+  timestamp: number;
+};
+
 type RpcResponse = {
   id: number;
   result?: unknown;
@@ -186,6 +201,7 @@ function sessionMessagesToChatItems(messages: SessionMessage[]): ChatItem[] {
 const SESSION_STORAGE_KEY = 'my-agent:sessionId';
 
 export function useGateway(url = 'ws://localhost:18789') {
+  const gatewayToken = (window as any).electronAPI?.gatewayToken || localStorage.getItem('my-agent:gateway-token') || '';
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [chatItems, setChatItems] = useState<ChatItem[]>([]);
   const [channelMessages, setChannelMessages] = useState<ChannelMessage[]>([]);
@@ -195,6 +211,8 @@ export function useGateway(url = 'ws://localhost:18789') {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [pendingQuestion, setPendingQuestion] = useState<AskUserQuestion | null>(null);
+  const [pendingApprovals, setPendingApprovals] = useState<ToolApproval[]>([]);
+  const [notifications, setNotifications] = useState<ToolNotification[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const rpcIdRef = useRef(0);
@@ -418,6 +436,21 @@ export function useGateway(url = 'ws://localhost:18789') {
         break;
       }
 
+      case 'agent.tool_approval': {
+        const d = data as ToolApproval;
+        setPendingApprovals(prev => [...prev, d]);
+        break;
+      }
+
+      case 'agent.tool_notify': {
+        const d = data as ToolNotification;
+        setNotifications(prev => [...prev.slice(-20), d]);
+        setTimeout(() => {
+          setNotifications(prev => prev.filter(n => n.timestamp !== d.timestamp));
+        }, 5000);
+        break;
+      }
+
       case 'fs.change': {
         const d = data as { path: string; eventType: string; filename: string | null };
         // notify all listeners
@@ -440,32 +473,63 @@ export function useGateway(url = 'ws://localhost:18789') {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (wsRef.current !== ws) return; // stale connection
-      setConnectionState('connected');
-      rpc('status').then((res) => {
-        const s = res as { channels?: ChannelStatusInfo[] };
-        if (s.channels) setChannelStatuses(s.channels);
-      }).catch(() => {});
-      rpc('config.get').then((res) => {
-        const c = res as { model?: string };
-        if (c.model) setModel(c.model);
-      }).catch(() => {});
-      rpc('sessions.list').then((res) => {
-        const arr = res as SessionInfo[];
-        if (Array.isArray(arr)) setSessions(arr);
-      }).catch(() => {});
-      // restore last session from localStorage
-      const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (savedSession) {
-        rpc('sessions.get', { sessionId: savedSession }).then((res) => {
-          const r = res as { sessionId: string; messages: SessionMessage[] };
-          if (r?.messages) {
-            setChatItems(sessionMessagesToChatItems(r.messages));
-            setCurrentSessionId(savedSession);
-          }
-        }).catch(() => {
-          localStorage.removeItem(SESSION_STORAGE_KEY);
+      if (wsRef.current !== ws) return;
+
+      const token = gatewayToken;
+      if (token) {
+        const authId = ++rpcIdRef.current;
+        ws.send(JSON.stringify({ method: 'auth', params: { token }, id: authId }));
+        pendingRpcRef.current.set(authId, {
+          resolve: () => {
+            setConnectionState('connected');
+            rpc('config.get').then((res) => {
+              const c = res as { model?: string };
+              if (c.model) setModel(c.model);
+            }).catch(() => {});
+            rpc('sessions.list').then((res) => {
+              const arr = res as SessionInfo[];
+              if (Array.isArray(arr)) setSessions(arr);
+            }).catch(() => {});
+            const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+            if (savedSession) {
+              rpc('sessions.get', { sessionId: savedSession }).then((res) => {
+                const r = res as { sessionId: string; messages: SessionMessage[] };
+                if (r?.messages) {
+                  setChatItems(sessionMessagesToChatItems(r.messages));
+                  setCurrentSessionId(savedSession);
+                }
+              }).catch(() => {
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+              });
+            }
+          },
+          reject: (err) => {
+            console.error('auth failed:', err);
+            setConnectionState('disconnected');
+          },
         });
+      } else {
+        setConnectionState('connected');
+        rpc('config.get').then((res) => {
+          const c = res as { model?: string };
+          if (c.model) setModel(c.model);
+        }).catch(() => {});
+        rpc('sessions.list').then((res) => {
+          const arr = res as SessionInfo[];
+          if (Array.isArray(arr)) setSessions(arr);
+        }).catch(() => {});
+        const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (savedSession) {
+          rpc('sessions.get', { sessionId: savedSession }).then((res) => {
+            const r = res as { sessionId: string; messages: SessionMessage[] };
+            if (r?.messages) {
+              setChatItems(sessionMessagesToChatItems(r.messages));
+              setCurrentSessionId(savedSession);
+            }
+          }).catch(() => {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+          });
+        }
       }
     };
 
@@ -508,7 +572,7 @@ export function useGateway(url = 'ws://localhost:18789') {
     ws.onerror = () => {
       ws.close();
     };
-  }, [url, rpc, handleEvent]);
+  }, [url, rpc, handleEvent, gatewayToken]);
 
   useEffect(() => {
     connect();
@@ -571,6 +635,32 @@ export function useGateway(url = 'ws://localhost:18789') {
     setPendingQuestion(null);
   }, []);
 
+  const approveToolUse = useCallback(async (requestId: string, modifiedInput?: Record<string, unknown>) => {
+    try {
+      await rpc('tool.approve', { requestId, modifiedInput });
+      setPendingApprovals(prev => prev.filter(a => a.requestId !== requestId));
+    } catch (err) {
+      console.error('failed to approve:', err);
+    }
+  }, [rpc]);
+
+  const denyToolUse = useCallback(async (requestId: string, reason?: string) => {
+    try {
+      await rpc('tool.deny', { requestId, reason });
+      setPendingApprovals(prev => prev.filter(a => a.requestId !== requestId));
+    } catch (err) {
+      console.error('failed to deny:', err);
+    }
+  }, [rpc]);
+
+  const abortAgent = useCallback(async () => {
+    try {
+      await rpc('agent.abort', {});
+    } catch (err) {
+      console.error('failed to abort:', err);
+    }
+  }, [rpc]);
+
   const newSession = useCallback(() => {
     setCurrentSessionId(undefined);
     setChatItems([]);
@@ -602,6 +692,7 @@ export function useGateway(url = 'ws://localhost:18789') {
     ws: wsRef.current,
     rpc,
     sendMessage,
+    abortAgent,
     newSession,
     loadSession,
     setCurrentSessionId,
@@ -609,6 +700,10 @@ export function useGateway(url = 'ws://localhost:18789') {
     changeModel,
     answerQuestion,
     dismissQuestion,
+    pendingApprovals,
+    notifications,
+    approveToolUse,
+    denyToolUse,
     onFileChange,
   };
 }

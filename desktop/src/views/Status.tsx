@@ -15,6 +15,8 @@ export function StatusView({ gateway }: Props) {
       .catch(() => {});
   }, [gateway.connectionState, gateway.rpc]);
 
+  const hasToken = !!(window as any).electronAPI?.gatewayToken || !!localStorage.getItem('my-agent:gateway-token');
+
   return (
     <div className="chat-view">
       <div className="view-header">
@@ -27,6 +29,25 @@ export function StatusView({ gateway }: Props) {
         </span>
       </div>
       <div className="view-body">
+        {/* security */}
+        <div className="card">
+          <div className="card-title">Security</div>
+          <div className="card-body">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+              <span>gateway auth:</span>
+              <span className={`badge ${hasToken ? 'connected' : 'disconnected'}`}>
+                {hasToken ? 'token active' : 'no token'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+              <span>pending approvals:</span>
+              <span style={{ color: gateway.pendingApprovals.length > 0 ? 'var(--accent-amber)' : 'var(--text-muted)' }}>
+                {gateway.pendingApprovals.length}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* gateway */}
         <div className="card">
           <div className="card-title">Gateway</div>

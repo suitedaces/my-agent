@@ -100,10 +100,20 @@ const bashValidationHook: HookCallback = async (input) => {
 
   // block dangerous commands
   const dangerous = [
-    /rm\s+-rf\s+\//, // rm -rf /
-    /mkfs\./,        // format disk
-    /dd\s+if=/,      // raw disk write
-    />\s*\/dev\/sd/, // write to disk device
+    /rm\s+-rf\s+\//,
+    /rm\s+-rf\s+~/,
+    /rm\s+-rf\s+\.\.\//,
+    /mkfs\./,
+    /dd\s+if=/,
+    />\s*\/dev\/sd/,
+    /curl\s+.*\|\s*(ba)?sh/,
+    /wget\s+.*\|\s*(ba)?sh/,
+    /chmod\s+777/,
+    /:()\{\s*:\|:&\s*\};:/,
+    /shutdown|reboot|halt/,
+    /launchctl\s+unload/,
+    /defaults\s+delete/,
+    /find\s+\/\s+-delete/,
   ];
 
   for (const pattern of dangerous) {
