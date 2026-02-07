@@ -1,0 +1,33 @@
+# docs directory
+docs/
+
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+dist-electron/
+desktop/dist/
+desktop/dist-electron/
+
+# environment variables
+.env
+.env.local
+
+# sessions
+sessions/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# temp files
+*.tmp
+*.swp
