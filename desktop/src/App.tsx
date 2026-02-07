@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useGateway } from './hooks/useGateway';
 import { ChatView } from './views/Chat';
 import { ChannelView } from './views/Channel';
-import { AutomationView } from './views/Automation';
+import { Automations } from './components/Automations';
 import { FileExplorer } from './components/FileExplorer';
+import { FileViewer } from './components/FileViewer';
 import { StatusView } from './views/Status';
 
 type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'status';
@@ -19,9 +20,14 @@ const NAV_ITEMS: { id: NavTab; label: string; icon: string }[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('chat');
   const [showFiles, setShowFiles] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const gw = useGateway();
 
   const renderView = () => {
+    if (selectedFile) {
+      return <FileViewer filePath={selectedFile} rpc={gw.rpc} onClose={() => setSelectedFile(null)} />;
+    }
+
     switch (activeTab) {
       case 'chat':
         return <ChatView gateway={gw} />;
@@ -30,7 +36,7 @@ export default function App() {
       case 'telegram':
         return <ChannelView channel="telegram" gateway={gw} />;
       case 'automation':
-        return <AutomationView gateway={gw} />;
+        return <Automations gateway={gw} />;
       case 'status':
         return <StatusView gateway={gw} />;
     }
@@ -100,7 +106,12 @@ export default function App() {
         </div>
 
         {showFiles && (
-          <FileExplorer rpc={gw.rpc} connected={gw.connectionState === 'connected'} />
+          <FileExplorer
+            rpc={gw.rpc}
+            connected={gw.connectionState === 'connected'}
+            onFileClick={setSelectedFile}
+            onFileChange={gw.onFileChange}
+          />
         )}
       </div>
     </>

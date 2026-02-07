@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'node:http';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync, mkdirSync, rmSync, renameSync, watch, type FSWatcher } from 'node:fs';
 import { resolve, join } from 'node:path';
 import type { Config } from '../config.js';
 import type { WsMessage, WsResponse, WsEvent, GatewayContext } from './types.js';
@@ -13,6 +13,7 @@ import { startCronRunner, loadCronJobs, saveCronJobs, type CronRunner } from '..
 import { checkSkillEligibility, loadAllSkills } from '../skills/loader.js';
 import type { InboundMessage } from '../channels/types.js';
 import { getChannelHandler } from '../tools/messaging.js';
+import { setCronRunner } from '../tools/index.js';
 
 const DEFAULT_PORT = 18789;
 const DEFAULT_HOST = 'localhost';
@@ -47,6 +48,49 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       }
+    }
+  };
+
+  // file system watcher manager
+  const fileWatchers = new Map<string, { watcher: FSWatcher; refCount: number }>();
+
+  const startWatching = (path: string) => {
+    const resolved = resolve(path);
+    const existing = fileWatchers.get(resolved);
+
+    if (existing) {
+      existing.refCount++;
+      return;
+    }
+
+    try {
+      const watcher = watch(resolved, { recursive: false }, (eventType, filename) => {
+        console.log(`[gateway] fs.watch: ${eventType} in ${resolved}${filename ? '/' + filename : ''}`);
+        broadcast({
+          event: 'fs.change',
+          data: { path: resolved, eventType, filename: filename || null, timestamp: Date.now() },
+        });
+      });
+
+      fileWatchers.set(resolved, { watcher, refCount: 1 });
+      console.log(`[gateway] started watching: ${resolved}`);
+    } catch (err) {
+      console.error(`[gateway] failed to watch ${resolved}:`, err);
+    }
+  };
+
+  const stopWatching = (path: string) => {
+    const resolved = resolve(path);
+    const existing = fileWatchers.get(resolved);
+
+    if (!existing) return;
+
+    existing.refCount--;
+
+    if (existing.refCount <= 0) {
+      existing.watcher.close();
+      fileWatchers.delete(resolved);
+      console.log(`[gateway] stopped watching: ${resolved}`);
     }
   };
 
@@ -143,6 +187,8 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         broadcast({ event: 'cron.result', data: { job: job.id, name: job.name, ...result, timestamp: Date.now() } });
       },
     });
+    // make cron runner available to MCP tools
+    setCronRunner(cronRunner);
   }
 
   const context: GatewayContext = {
@@ -518,6 +564,83 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           }
         }
 
+        case 'fs.read': {
+          const filePath = params?.path as string;
+          if (!filePath) return { id, error: 'path required' };
+          const resolved = resolve(filePath);
+          try {
+            const content = readFileSync(resolved, 'utf-8');
+            return { id, result: { content, path: resolved } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'fs.readBinary': {
+          const filePath = params?.path as string;
+          if (!filePath) return { id, error: 'path required' };
+          const resolved = resolve(filePath);
+          try {
+            const buffer = readFileSync(resolved);
+            const base64 = buffer.toString('base64');
+            return { id, result: { content: base64, path: resolved } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'fs.mkdir': {
+          const dirPath = params?.path as string;
+          if (!dirPath) return { id, error: 'path required' };
+          const resolved = resolve(dirPath);
+          try {
+            mkdirSync(resolved, { recursive: true });
+            return { id, result: { created: resolved } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'fs.delete': {
+          const targetPath = params?.path as string;
+          if (!targetPath) return { id, error: 'path required' };
+          const resolved = resolve(targetPath);
+          try {
+            rmSync(resolved, { recursive: true, force: true });
+            return { id, result: { deleted: resolved } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'fs.rename': {
+          const oldPath = params?.oldPath as string;
+          const newPath = params?.newPath as string;
+          if (!oldPath || !newPath) return { id, error: 'oldPath and newPath required' };
+          const resolvedOld = resolve(oldPath);
+          const resolvedNew = resolve(newPath);
+          try {
+            renameSync(resolvedOld, resolvedNew);
+            return { id, result: { oldPath: resolvedOld, newPath: resolvedNew } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'fs.watch.start': {
+          const watchPath = params?.path as string;
+          if (!watchPath) return { id, error: 'path required' };
+          startWatching(watchPath);
+          return { id, result: { watching: resolve(watchPath) } };
+        }
+
+        case 'fs.watch.stop': {
+          const watchPath = params?.path as string;
+          if (!watchPath) return { id, error: 'path required' };
+          stopWatching(watchPath);
+          return { id, result: { stopped: resolve(watchPath) } };
+        }
+
         default:
           return { id, error: `unknown method: ${method}` };
       }
@@ -598,6 +721,13 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       heartbeatRunner?.stop();
       cronRunner?.stop();
       await channelManager.stopAll();
+
+      // close all file watchers
+      for (const [path, { watcher }] of fileWatchers) {
+        watcher.close();
+        console.log(`[gateway] closed watcher: ${path}`);
+      }
+      fileWatchers.clear();
 
       for (const ws of clients) {
         ws.close();

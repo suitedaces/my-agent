@@ -166,6 +166,7 @@ export function useGateway(url = 'ws://localhost:18789') {
   const rpcIdRef = useRef(0);
   const pendingRpcRef = useRef(new Map<number, PendingRpc>());
   const reconnectTimerRef = useRef<number | null>(null);
+  const fsChangeListenersRef = useRef<Set<(path: string) => void>>(new Set());
 
   const rpc = useCallback(async (method: string, params?: Record<string, unknown>): Promise<unknown> => {
     const ws = wsRef.current;
@@ -350,6 +351,13 @@ export function useGateway(url = 'ws://localhost:18789') {
         setAgentStatus(d.activeRun ? `running (${d.source || 'agent'})` : 'idle');
         break;
       }
+
+      case 'fs.change': {
+        const d = data as { path: string; eventType: string; filename: string | null };
+        // notify all listeners
+        fsChangeListenersRef.current.forEach(listener => listener(d.path));
+        break;
+      }
     }
   }, []);
 
@@ -483,6 +491,13 @@ export function useGateway(url = 'ws://localhost:18789') {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   }, []);
 
+  const onFileChange = useCallback((listener: (path: string) => void) => {
+    fsChangeListenersRef.current.add(listener);
+    return () => {
+      fsChangeListenersRef.current.delete(listener);
+    };
+  }, []);
+
   return {
     connectionState,
     chatItems,
@@ -491,10 +506,12 @@ export function useGateway(url = 'ws://localhost:18789') {
     agentStatus,
     sessions,
     currentSessionId,
+    ws: wsRef.current,
     rpc,
     sendMessage,
     newSession,
     loadSession,
     setCurrentSessionId,
+    onFileChange,
   };
 }

@@ -31,3 +31,5 @@ npm-debug.log*
 # temp files
 *.tmp
 *.swp
+
+.claude

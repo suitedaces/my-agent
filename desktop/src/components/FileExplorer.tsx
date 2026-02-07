@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import type React from 'react';
 
 type FileEntry = {
   name: string;
@@ -15,6 +16,8 @@ type DirState = {
 type Props = {
   rpc: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   connected: boolean;
+  onFileClick?: (filePath: string) => void;
+  onFileChange?: (listener: (path: string) => void) => () => void;
 };
 
 function shortenPath(p: string): string {
@@ -47,11 +50,12 @@ function buildCrumbs(root: string, current: string): { label: string; path: stri
   return crumbs;
 }
 
-export function FileExplorer({ rpc, connected }: Props) {
+export function FileExplorer({ rpc, connected, onFileClick, onFileChange }: Props) {
   const [homeCwd, setHomeCwd] = useState('');
   const [viewRoot, setViewRoot] = useState('');
   const [dirs, setDirs] = useState<Map<string, DirState>>(new Map());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const loadDir = useCallback(async (path: string) => {
     setDirs(prev => {
@@ -89,6 +93,29 @@ export function FileExplorer({ rpc, connected }: Props) {
     }).catch(() => {});
   }, [rpc, loadDir, connected, viewRoot]);
 
+  // watch current viewRoot directory for changes
+  useEffect(() => {
+    if (!viewRoot || !connected) return;
+
+    // start watching
+    rpc('fs.watch.start', { path: viewRoot }).catch(() => {});
+
+    // listen to file change events
+    const unsubscribe = onFileChange?.((changedPath) => {
+      // refresh if the changed path is the current viewRoot
+      if (changedPath === viewRoot) {
+        console.log('[file-explorer] reloading due to fs change:', changedPath);
+        loadDir(viewRoot);
+      }
+    });
+
+    return () => {
+      // stop watching
+      rpc('fs.watch.stop', { path: viewRoot }).catch(() => {});
+      unsubscribe?.();
+    };
+  }, [viewRoot, connected, rpc, loadDir, onFileChange]);
+
   const navigateTo = useCallback((path: string) => {
     setViewRoot(path);
     setExpanded(new Set());
@@ -108,7 +135,57 @@ export function FileExplorer({ rpc, connected }: Props) {
     });
   }, [dirs, loadDir]);
 
-  const renderEntries = (parentPath: string, depth: number): JSX.Element[] => {
+  const createFolder = useCallback(async () => {
+    const folderName = prompt('Enter folder name:');
+    if (!folderName) return;
+
+    const newPath = viewRoot + '/' + folderName;
+    try {
+      await rpc('fs.mkdir', { path: newPath });
+      loadDir(viewRoot);
+    } catch (err) {
+      alert('Failed to create folder: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [viewRoot, rpc, loadDir]);
+
+  const deleteItem = useCallback(async (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete ${path}?`)) return;
+
+    try {
+      await rpc('fs.delete', { path });
+      const parentPath = path.substring(0, path.lastIndexOf('/'));
+      loadDir(parentPath);
+      if (selectedPath === path) setSelectedPath(null);
+    } catch (err) {
+      alert('Failed to delete: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [rpc, loadDir, selectedPath]);
+
+  const renameItem = useCallback(async (oldPath: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const oldName = oldPath.substring(oldPath.lastIndexOf('/') + 1);
+    const newName = prompt('Enter new name:', oldName);
+    if (!newName || newName === oldName) return;
+
+    const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+    const newPath = parentPath + '/' + newName;
+
+    try {
+      await rpc('fs.rename', { oldPath, newPath });
+      loadDir(parentPath);
+      if (selectedPath === oldPath) setSelectedPath(newPath);
+    } catch (err) {
+      alert('Failed to rename: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [rpc, loadDir, selectedPath]);
+
+  const handleFileClick = useCallback((path: string) => {
+    setSelectedPath(path);
+    onFileClick?.(path);
+  }, [onFileClick]);
+
+  const renderEntries = (parentPath: string, depth: number): React.JSX.Element[] => {
     const state = dirs.get(parentPath);
     if (!state) return [];
 
@@ -120,7 +197,7 @@ export function FileExplorer({ rpc, connected }: Props) {
       return [<div key="error" className="fe-entry fe-error" style={{ paddingLeft: depth * 16 + 12 }}>{state.error}</div>];
     }
 
-    const items: JSX.Element[] = [];
+    const items: React.JSX.Element[] = [];
     for (const entry of state.entries) {
       const fullPath = parentPath + '/' + entry.name;
       const isDir = entry.type === 'directory';
@@ -130,14 +207,18 @@ export function FileExplorer({ rpc, connected }: Props) {
       items.push(
         <div
           key={fullPath}
-          className={`fe-entry${isDot ? ' fe-dimmed' : ''}`}
+          className={`fe-entry${isDot ? ' fe-dimmed' : ''}${selectedPath === fullPath ? ' fe-selected' : ''}`}
           style={{ paddingLeft: depth * 16 + 12 }}
-          onClick={isDir ? () => toggleDir(fullPath) : undefined}
+          onClick={isDir ? () => toggleDir(fullPath) : () => handleFileClick(fullPath)}
           onDoubleClick={isDir ? () => navigateTo(fullPath) : undefined}
         >
           <span className="fe-icon">{isDir ? (isExpanded ? 'v' : '>') : ' '}</span>
           <span className={isDir ? 'fe-dir-name' : 'fe-file-name'}>{entry.name}</span>
           {entry.size != null && <span className="fe-size">{formatSize(entry.size)}</span>}
+          <span className="fe-actions">
+            <button className="fe-action-btn" onClick={(e) => renameItem(fullPath, e)} title="Rename">✎</button>
+            <button className="fe-action-btn" onClick={(e) => deleteItem(fullPath, e)} title="Delete">×</button>
+          </span>
         </div>
       );
 
@@ -155,6 +236,7 @@ export function FileExplorer({ rpc, connected }: Props) {
     <div className="file-explorer-panel">
       <div className="fe-header">
         <span>files</span>
+        <button className="fe-new-folder-btn" onClick={createFolder} title="New Folder">+</button>
         <div className="fe-breadcrumbs">
           {crumbs.map((c, i) => (
             <span key={c.path}>

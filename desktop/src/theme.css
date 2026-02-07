@@ -773,3 +773,334 @@ input, textarea, select, button {
   margin: 8px 0;
 }
 
+/* file explorer actions */
+.fe-new-folder-btn {
+  background: none;
+  border: none;
+  color: var(--accent-blue);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 8px;
+  margin-left: 8px;
+}
+
+.fe-new-folder-btn:hover {
+  color: var(--accent-green);
+}
+
+.fe-entry {
+  position: relative;
+}
+
+.fe-entry.fe-selected {
+  background: var(--bg-tertiary);
+}
+
+.fe-actions {
+  display: none;
+  margin-left: auto;
+  gap: 4px;
+}
+
+.fe-entry:hover .fe-actions {
+  display: flex;
+}
+
+.fe-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+.fe-action-btn:hover {
+  color: var(--accent-blue);
+}
+
+/* file viewer */
+.file-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.file-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.file-viewer-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.file-viewer-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-viewer-close:hover {
+  color: var(--accent-red);
+}
+
+.file-viewer-body {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.file-viewer-loading,
+.file-viewer-error,
+.file-viewer-unsupported {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+}
+
+.file-viewer-error {
+  color: var(--accent-red);
+}
+
+/* code viewer */
+.code-viewer {
+  height: 100%;
+  overflow: auto;
+}
+
+/* markdown viewer */
+.markdown-viewer {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.markdown-viewer h1,
+.markdown-viewer h2,
+.markdown-viewer h3,
+.markdown-viewer h4,
+.markdown-viewer h5,
+.markdown-viewer h6 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+}
+
+.markdown-viewer h1 { font-size: 24px; }
+.markdown-viewer h2 { font-size: 20px; }
+.markdown-viewer h3 { font-size: 16px; }
+
+.markdown-viewer p {
+  margin: 8px 0;
+}
+
+.markdown-viewer code {
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+
+.markdown-viewer pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.markdown-viewer pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-viewer ul,
+.markdown-viewer ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.markdown-viewer a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.markdown-viewer a:hover {
+  text-decoration: underline;
+}
+
+.markdown-viewer blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.markdown-viewer table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+}
+
+.markdown-viewer th,
+.markdown-viewer td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.markdown-viewer th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+
+/* pdf viewer */
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-secondary);
+}
+
+.pdf-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.pdf-controls button {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.pdf-controls button:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.pdf-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pdf-content {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* excel viewer */
+.excel-viewer {
+  height: 100%;
+  background: white;
+}
+
+.excel-viewer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.excel-sheet-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.excel-sheet-tab {
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.excel-sheet-tab:hover {
+  background: var(--bg-hover);
+}
+
+.excel-sheet-tab.active {
+  background: var(--accent-blue);
+  color: white;
+  border-color: var(--accent-blue);
+}
+
+.excel-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.excel-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 100%;
+}
+
+.excel-table td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  white-space: nowrap;
+  background: var(--bg-secondary);
+}
+
+.excel-table tr:first-child td {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+.excel-viewer-loading,
+.excel-viewer-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.excel-viewer-error {
+  color: var(--accent-red);
+}
+
