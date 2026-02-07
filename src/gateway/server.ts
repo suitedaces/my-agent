@@ -19,6 +19,28 @@ import { randomUUID } from 'node:crypto';
 const DEFAULT_PORT = 18789;
 const DEFAULT_HOST = 'localhost';
 
+// strip mcp__<server>__ prefix from SDK tool names
+function cleanToolName(name: string): string {
+  if (!name.startsWith('mcp__')) return name;
+  const idx = name.indexOf('__', 5);
+  return idx >= 0 ? name.slice(idx + 2) : name;
+}
+
+const TOOL_PENDING_TEXT: Record<string, string> = {
+  Read: 'reading file', Write: 'writing file', Edit: 'editing file',
+  Glob: 'searching files', Grep: 'searching code', Bash: 'running command',
+  WebFetch: 'fetching url', WebSearch: 'searching web', Task: 'running task',
+  AskUserQuestion: 'asking question', TodoWrite: 'updating tasks',
+  NotebookEdit: 'editing notebook', message: 'sending message',
+  screenshot: 'taking screenshot', schedule_reminder: 'scheduling reminder',
+  schedule_recurring: 'scheduling task', schedule_cron: 'scheduling cron job',
+  list_reminders: 'listing reminders', cancel_reminder: 'cancelling reminder',
+};
+
+function toolPendingText(name: string): string {
+  return TOOL_PENDING_TEXT[name] || `running ${name}`;
+}
+
 export type GatewayOptions = {
   config: Config;
   port?: number;
@@ -400,16 +422,16 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             if (event.type === 'content_block_start') {
               const cb = event.content_block as Record<string, unknown>;
               if (cb?.type === 'tool_use') {
-                if (cb.name === 'message') usedMessageTool = true;
+                const toolName = cleanToolName(cb.name as string);
+                if (toolName === 'message') usedMessageTool = true;
                 broadcast({
                   event: 'agent.tool_use',
-                  data: { source, sessionKey, tool: cb.name, timestamp: Date.now() },
+                  data: { source, sessionKey, tool: toolName, timestamp: Date.now() },
                 });
-                // update status message in channel
                 const sm = statusMessages.get(sessionKey);
                 if (sm) {
                   const h = getChannelHandler(sm.channel);
-                  if (h) { try { await h.edit(sm.messageId, `running ${cb.name as string}...`, sm.chatId); } catch {} }
+                  if (h) { try { await h.edit(sm.messageId, `${toolPendingText(toolName)}...`, sm.chatId); } catch {} }
                 }
               }
             }

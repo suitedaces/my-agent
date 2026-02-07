@@ -22,7 +22,10 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
   registerChannelHandler('telegram', {
     send: async (target, message, sendOpts) => {
       const replyTo = sendOpts?.replyTo ? Number(sendOpts.replyTo) : undefined;
-      return sendTelegramMessage(bot.api, target, message, { replyTo });
+      return sendTelegramMessage(bot.api, target, message, {
+        replyTo,
+        media: sendOpts?.media,
+      });
     },
     edit: async (messageId, message, chatId) => {
       if (!chatId) throw new Error('chatId required for Telegram edit');

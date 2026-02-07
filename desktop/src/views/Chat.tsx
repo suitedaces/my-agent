@@ -6,11 +6,40 @@ type Props = {
   gateway: ReturnType<typeof useGateway>;
 };
 
+const TOOL_TEXT: Record<string, { pending: string; done: string }> = {
+  Read: { pending: 'Reading file', done: 'Read file' },
+  Write: { pending: 'Writing file', done: 'Wrote file' },
+  Edit: { pending: 'Editing file', done: 'Edited file' },
+  Glob: { pending: 'Searching files', done: 'Searched files' },
+  Grep: { pending: 'Searching code', done: 'Searched code' },
+  Bash: { pending: 'Running command', done: 'Ran command' },
+  WebFetch: { pending: 'Fetching URL', done: 'Fetched URL' },
+  WebSearch: { pending: 'Searching web', done: 'Searched web' },
+  Task: { pending: 'Running task', done: 'Completed task' },
+  AskUserQuestion: { pending: 'Asking question', done: 'Got answer' },
+  TodoWrite: { pending: 'Updating tasks', done: 'Updated tasks' },
+  NotebookEdit: { pending: 'Editing notebook', done: 'Edited notebook' },
+  message: { pending: 'Sending message', done: 'Sent message' },
+  screenshot: { pending: 'Taking screenshot', done: 'Took screenshot' },
+  schedule_reminder: { pending: 'Scheduling reminder', done: 'Scheduled reminder' },
+  schedule_recurring: { pending: 'Scheduling recurring task', done: 'Scheduled recurring task' },
+  schedule_cron: { pending: 'Scheduling cron job', done: 'Scheduled cron job' },
+  list_reminders: { pending: 'Listing reminders', done: 'Listed reminders' },
+  cancel_reminder: { pending: 'Cancelling reminder', done: 'Cancelled reminder' },
+};
+
+function toolText(name: string, state: 'pending' | 'done'): string {
+  const t = TOOL_TEXT[name];
+  return t ? t[state] : (state === 'pending' ? `Running ${name}` : `Ran ${name}`);
+}
+
 function ToolUseItem({ item }: { item: Extract<ChatItem, { type: 'tool_use' }> }) {
   const [open, setOpen] = useState(false);
   const hasOutput = item.output != null;
+  const isPending = item.streaming || !hasOutput;
   const statusIcon = item.streaming ? '...' : hasOutput ? (item.is_error ? '✗' : '✓') : '…';
   const statusClass = item.is_error ? 'error' : hasOutput ? 'success' : '';
+  const displayName = toolText(item.name, isPending ? 'pending' : 'done');
 
   let inputSummary = '';
   try {
@@ -45,7 +74,7 @@ function ToolUseItem({ item }: { item: Extract<ChatItem, { type: 'tool_use' }> }
     <div className="chat-item chat-item-tool">
       <div className="tool-header" onClick={() => setOpen(o => !o)}>
         <span className={`tool-status ${statusClass}`}>{statusIcon}</span>
-        <span className="tool-name">{item.name}</span>
+        <span className="tool-name">{displayName}</span>
         <span className="tool-summary">{inputSummary}</span>
         <span className="tool-chevron">{open ? '▾' : '▸'}</span>
       </div>

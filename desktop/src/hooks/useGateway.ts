@@ -1,5 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// strip mcp__<server>__ prefix from SDK tool names
+function cleanToolName(name: string): string {
+  if (!name.startsWith('mcp__')) return name;
+  const idx = name.indexOf('__', 5);
+  return idx >= 0 ? name.slice(idx + 2) : name;
+}
+
+const TOOL_PENDING_TEXT: Record<string, string> = {
+  Read: 'reading file', Write: 'writing file', Edit: 'editing file',
+  Glob: 'searching files', Grep: 'searching code', Bash: 'running command',
+  WebFetch: 'fetching url', WebSearch: 'searching web', Task: 'running task',
+  AskUserQuestion: 'asking question', TodoWrite: 'updating tasks',
+  NotebookEdit: 'editing notebook', message: 'sending message',
+  screenshot: 'taking screenshot', schedule_reminder: 'scheduling reminder',
+  schedule_recurring: 'scheduling task', schedule_cron: 'scheduling cron job',
+  list_reminders: 'listing reminders', cancel_reminder: 'cancelling reminder',
+};
+
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
 export type ChatItem =
@@ -141,7 +159,7 @@ function sessionMessagesToChatItems(messages: SessionMessage[]): ChatItem[] {
             items.push({
               type: 'tool_use',
               id: block.id || '',
-              name: block.name || 'unknown',
+              name: cleanToolName(block.name || 'unknown'),
               input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {}),
               timestamp: ts,
             });
@@ -229,7 +247,7 @@ export function useGateway(url = 'ws://localhost:18789') {
       case 'agent.tool_use': {
         const d = data as { source: string; sessionKey?: string; tool: string; timestamp: number };
         if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
-        setAgentStatus(`running ${d.tool}...`);
+        setAgentStatus(`${TOOL_PENDING_TEXT[d.tool] || `running ${d.tool}`}...`);
         break;
       }
 
@@ -245,7 +263,7 @@ export function useGateway(url = 'ws://localhost:18789') {
           if (cb.type === 'text') {
             setChatItems(prev => [...prev, { type: 'text', content: '', streaming: true, timestamp: Date.now() }]);
           } else if (cb.type === 'tool_use') {
-            setChatItems(prev => [...prev, { type: 'tool_use', id: (cb.id as string) || '', name: (cb.name as string) || 'unknown', input: '', streaming: true, timestamp: Date.now() }]);
+            setChatItems(prev => [...prev, { type: 'tool_use', id: (cb.id as string) || '', name: cleanToolName((cb.name as string) || 'unknown'), input: '', streaming: true, timestamp: Date.now() }]);
           } else if (cb.type === 'thinking') {
             setChatItems(prev => [...prev, { type: 'thinking', content: '', streaming: true, timestamp: Date.now() }]);
           }
