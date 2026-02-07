@@ -124,6 +124,30 @@ ${runtimeParts.join(' | ')}`);
     const isMessagingChannel = channel && ['whatsapp', 'telegram'].includes(channel);
 
     if (isMessagingChannel) {
+      let formattingSection = '';
+      if (channel === 'telegram') {
+        formattingSection = `
+
+**Text formatting: HTML mode**
+
+All message text MUST be formatted as Telegram HTML. Do NOT use markdown syntax.
+
+Supported tags:
+<b>bold</b>  <i>italic</i>  <u>underline</u>  <s>strikethrough</s>
+<code>inline code</code>
+<pre>code block</pre>
+<pre><code class="language-python">code with language</code></pre>
+<a href="http://example.com">link text</a>
+<blockquote>quoted text</blockquote>
+<tg-spoiler>spoiler</tg-spoiler>
+
+Rules:
+- Escape &, <, > in plain text as &amp; &lt; &gt;
+- Do NOT use markdown: no **bold**, no \`code\`, no [links](url)
+- Nest tags freely: <b>bold <i>and italic</i></b>
+- Only the tags listed above are supported, no other HTML`;
+      }
+
       sections.push(`## Messaging (${channel})
 
 **IMPORTANT: You MUST use the 'message' tool to reply.**
@@ -138,7 +162,7 @@ message({
 })
 \`\`\`
 
-The gateway does NOT auto-send on messaging channels. If you don't use the message tool, your reply won't be sent.
+The gateway does NOT auto-send on messaging channels. If you don't use the message tool, your reply won't be sent.${formattingSection}
 
 **Silent replies:**
 To complete a task without sending anything, respond with exactly:
@@ -165,6 +189,17 @@ Use the 'message' tool to send messages to channels:
 
 Respond with "SILENT_REPLY" to suppress all output.`);
     }
+  }
+
+  // browser (only in full mode)
+  if (config.systemPromptMode === 'full' && config.browser?.enabled !== false) {
+    sections.push(`## Browser
+
+Use the browser tool for web automation. Workflow: open → snapshot → interact → re-snapshot.
+- snapshot returns element refs (e1, e2...). Use refs for click/type/fill/select.
+- Refs invalidate after navigation. Always re-snapshot after clicking links.
+- User logs in manually in the persistent browser profile. Agent reuses authenticated sessions.
+- Do not ask for credentials. If a site needs login, tell the user to log in manually.`);
   }
 
   // extra context

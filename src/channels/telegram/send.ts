@@ -2,6 +2,7 @@ import { extname } from 'node:path';
 import { lookup } from 'mime-types';
 import type { Api } from 'grammy';
 import { InputFile } from 'grammy';
+import { markdownToTelegramHtml } from './format.js';
 
 export function normalizeTelegramChatId(target: string): number | string {
   const trimmed = target.trim();
@@ -23,7 +24,7 @@ async function sendMedia(
   const file = new InputFile(mediaPath);
   const replyParams = replyTo ? { message_id: replyTo } : undefined;
   const opts: any = {
-    caption,
+    caption: caption ? markdownToTelegramHtml(caption) : undefined,
     parse_mode: 'HTML' as const,
     reply_parameters: replyParams,
   };
@@ -58,7 +59,8 @@ export async function sendTelegramMessage(
     return sendMedia(api, chatId, opts.media, text || undefined, opts.replyTo);
   }
 
-  const result = await api.sendMessage(chatId, text, {
+  const html = markdownToTelegramHtml(text);
+  const result = await api.sendMessage(chatId, html, {
     parse_mode: 'HTML',
     reply_parameters: opts?.replyTo ? { message_id: opts.replyTo } : undefined,
   });
@@ -75,7 +77,7 @@ export async function editTelegramMessage(
   newText: string
 ): Promise<void> {
   const cid = normalizeTelegramChatId(chatId);
-  await api.editMessageText(cid, Number(messageId), newText, { parse_mode: 'HTML' });
+  await api.editMessageText(cid, Number(messageId), markdownToTelegramHtml(newText), { parse_mode: 'HTML' });
 }
 
 export async function deleteTelegramMessage(

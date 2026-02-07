@@ -73,6 +73,14 @@ export type GatewayConfig = {
   enabled?: boolean;
 };
 
+export type BrowserConfig = {
+  enabled?: boolean;
+  executablePath?: string;
+  cdpPort?: number;
+  profileDir?: string;
+  headless?: boolean;
+};
+
 export type Config = {
   model: string;
   systemPromptMode: 'full' | 'minimal' | 'none';
@@ -88,6 +96,7 @@ export type Config = {
   cron?: CronConfig;
   channels?: ChannelsConfig;
   gateway?: GatewayConfig;
+  browser?: BrowserConfig;
   sessionDir: string;
   cwd: string;
 };
