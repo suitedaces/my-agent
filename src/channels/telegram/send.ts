@@ -17,6 +17,7 @@ export async function sendTelegramMessage(
 ): Promise<{ id: string; chatId: string }> {
   const chatId = normalizeTelegramChatId(target);
   const result = await api.sendMessage(chatId, text, {
+    parse_mode: 'HTML',
     reply_parameters: opts?.replyTo ? { message_id: opts.replyTo } : undefined,
   });
   return {
@@ -32,7 +33,7 @@ export async function editTelegramMessage(
   newText: string
 ): Promise<void> {
   const cid = normalizeTelegramChatId(chatId);
-  await api.editMessageText(cid, Number(messageId), newText);
+  await api.editMessageText(cid, Number(messageId), newText, { parse_mode: 'HTML' });
 }
 
 export async function deleteTelegramMessage(

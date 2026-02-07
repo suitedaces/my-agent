@@ -173,6 +173,7 @@ export function useGateway(url = 'ws://localhost:18789') {
   const [channelMessages, setChannelMessages] = useState<ChannelMessage[]>([]);
   const [channelStatuses, setChannelStatuses] = useState<ChannelStatusInfo[]>([]);
   const [agentStatus, setAgentStatus] = useState<string>('idle');
+  const [model, setModel] = useState<string>('');
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [pendingQuestion, setPendingQuestion] = useState<AskUserQuestion | null>(null);
@@ -427,6 +428,10 @@ export function useGateway(url = 'ws://localhost:18789') {
         const s = res as { channels?: ChannelStatusInfo[] };
         if (s.channels) setChannelStatuses(s.channels);
       }).catch(() => {});
+      rpc('config.get').then((res) => {
+        const c = res as { model?: string };
+        if (c.model) setModel(c.model);
+      }).catch(() => {});
       rpc('sessions.list').then((res) => {
         const arr = res as SessionInfo[];
         if (Array.isArray(arr)) setSessions(arr);
@@ -555,6 +560,11 @@ export function useGateway(url = 'ws://localhost:18789') {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   }, []);
 
+  const changeModel = useCallback(async (newModel: string) => {
+    await rpc('config.set', { key: 'model', value: newModel });
+    setModel(newModel);
+  }, [rpc]);
+
   const onFileChange = useCallback((listener: (path: string) => void) => {
     fsChangeListenersRef.current.add(listener);
     return () => {
@@ -577,6 +587,8 @@ export function useGateway(url = 'ws://localhost:18789') {
     newSession,
     loadSession,
     setCurrentSessionId,
+    model,
+    changeModel,
     answerQuestion,
     dismissQuestion,
     onFileChange,

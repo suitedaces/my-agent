@@ -699,8 +699,15 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         }
 
         case 'config.set': {
-          // hot reload not implemented yet - just acknowledge
-          return { id, error: 'config.set not yet implemented' };
+          const key = params?.key as string;
+          const value = params?.value;
+          if (!key) return { id, error: 'key required' };
+          if (key === 'model' && typeof value === 'string') {
+            config.model = value;
+            broadcast({ event: 'status.update', data: { model: value } });
+            return { id, result: { model: value } };
+          }
+          return { id, error: `unsupported config key: ${key}` };
         }
 
         case 'fs.list': {

@@ -72,6 +72,16 @@ export default function App() {
     <>
       <div className="titlebar">
         <span className="titlebar-title">my-agent</span>
+        <select
+          className="model-selector"
+          value={gw.model}
+          onChange={e => gw.changeModel(e.target.value)}
+          disabled={gw.connectionState !== 'connected'}
+        >
+          <option value="claude-opus-4-6">opus</option>
+          <option value="claude-sonnet-4-5-20250929">sonnet</option>
+          <option value="claude-haiku-4-5-20251001">haiku</option>
+        </select>
         <div className="titlebar-status">
           <span className={`status-dot ${gw.connectionState}`} />
           <span>{gw.connectionState === 'connected' ? gw.agentStatus : gw.connectionState}</span>
