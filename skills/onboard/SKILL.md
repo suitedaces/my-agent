@@ -61,6 +61,7 @@ things to learn:
 - **what they do** — work, projects, interests
 - **communication style** — do they want terse or thorough? formal or casual? do they hate filler?
 - **pet peeves** — what annoys them in an assistant? what should you never do?
+- **goals** — what are they trying to achieve? what are they working toward? short-term and long-term
 - **context** — what are they working on right now? what do they care about?
 - **tools & preferences** — languages, frameworks, OS, editor, anything relevant
 
@@ -75,6 +76,10 @@ after gathering enough, write `~/.my-agent/workspace/USER.md` using this structu
 - What to call them: {preference}
 - Timezone: {tz}
 - Notes: {anything notable}
+
+## Goals
+
+{what they're working toward — short-term and long-term}
 
 ## Context
 

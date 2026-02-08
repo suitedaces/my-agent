@@ -85,11 +85,13 @@ const DEFAULT_USER = `# User Profile
 - Timezone:
 - Notes:
 
+## Goals
+
+(What are they trying to achieve? Short-term and long-term.)
+
 ## Context
 
 (What do they care about? Projects? What annoys them? What makes them tick?)
-
-The more you know, the better you can help.
 `;
 
 export function ensureWorkspace(dir?: string): void {
