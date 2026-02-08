@@ -204,7 +204,13 @@ export function startCronRunner(opts: {
       const ms = parseDurationMs(job.every);
       if (ms) {
         const lastRun = job.lastRunAt ? new Date(job.lastRunAt).getTime() : Date.now();
-        nextRun = new Date(lastRun + ms);
+        let next = lastRun + ms;
+        // advance past missed runs (e.g. server was offline)
+        const now = Date.now();
+        while (next <= now) {
+          next += ms;
+        }
+        nextRun = new Date(next);
       }
     } else if (job.at) {
       nextRun = parseAtTime(job.at);

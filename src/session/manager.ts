@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import type { Config } from '../config.js';
 
@@ -113,13 +113,7 @@ export class SessionManager {
   append(sessionId: string, message: SessionMessage): void {
     const path = this.getSessionPath(sessionId);
     const line = JSON.stringify(message) + '\n';
-
-    if (existsSync(path)) {
-      const existing = readFileSync(path, 'utf-8');
-      writeFileSync(path, existing + line);
-    } else {
-      writeFileSync(path, line);
-    }
+    appendFileSync(path, line);
   }
 
   save(sessionId: string, messages: SessionMessage[]): void {
@@ -167,6 +161,12 @@ export class SessionManager {
     if (existsSync(path)) {
       const { unlinkSync } = require('node:fs');
       unlinkSync(path);
+      // remove from index
+      const index = this.loadIndex();
+      if (index[sessionId]) {
+        delete index[sessionId];
+        this.saveIndex(index);
+      }
       return true;
     }
     return false;
