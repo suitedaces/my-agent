@@ -8,11 +8,14 @@ export type GatewayStatus = {
 };
 
 export type SessionInfo = {
+  /** registry key: "channel:chatType:chatId" */
   key: string;
   channel: string;
   chatId: string;
   chatType: string;
+  /** our internal ID, used as JSONL filename for message persistence */
   sessionId: string;
+  /** SDK's session UUID, passed as `resume` to query() for conversation continuity */
   sdkSessionId?: string;
   messageCount: number;
   lastMessageAt: number;
@@ -66,6 +69,7 @@ export type RpcMethod =
   | 'sessions.get'
   | 'sessions.delete'
   | 'sessions.reset'
+  | 'sessions.resume'
   | 'channels.status'
   | 'channels.start'
   | 'channels.stop'

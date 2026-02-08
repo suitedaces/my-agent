@@ -519,6 +519,8 @@ export function useGateway(url = 'ws://localhost:18789') {
                 if (r?.messages) {
                   setChatItems(sessionMessagesToChatItems(r.messages));
                   setCurrentSessionId(savedSession);
+                  // restore registry so conversation continues after reconnect
+                  rpc('sessions.resume', { sessionId: savedSession }).catch(() => {});
                 }
               }).catch(() => {
                 localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -616,9 +618,12 @@ export function useGateway(url = 'ws://localhost:18789') {
         const items = sessionMessagesToChatItems(res.messages);
         setChatItems(items);
         setCurrentSessionId(sessionId);
-        // set active session key for stream filtering
         activeSessionKeyRef.current = sessionKey || 'desktop:dm:default';
         localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+        // restore registry entry so next chat.send continues this conversation
+        rpc('sessions.resume', { sessionId }).catch((err: unknown) => {
+          console.warn('failed to resume session in registry:', err);
+        });
       }
     } catch (err) {
       console.error('failed to load session:', err);

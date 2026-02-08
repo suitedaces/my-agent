@@ -73,11 +73,11 @@ export class SessionRegistry {
     return session;
   }
 
-  setSdkSessionId(key: string, sdkSessionId: string): void {
+  setSdkSessionId(key: string, sdkSessionId: string | undefined): void {
     const s = this.sessions.get(key);
     if (s) {
       s.sdkSessionId = sdkSessionId;
-      this.scheduleSave();
+      this.saveToDisk(); // immediate — sdkSessionId is too critical to debounce
     }
   }
 

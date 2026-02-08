@@ -244,6 +244,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       const gap = Date.now() - session.lastMessageAt;
       if (session.messageCount > 0 && gap > IDLE_TIMEOUT_MS) {
         console.log(`[gateway] idle timeout for ${session.key} (${Math.floor(gap / 3600000)}h), starting new session`);
+        fileSessionManager.setMetadata(session.sessionId, { sdkSessionId: undefined });
         sessionRegistry.remove(session.key);
         session = sessionRegistry.getOrCreate({
           channel: msg.channel,
@@ -276,6 +277,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
       if (cmd === 'new') {
         const old = sessionRegistry.get(key);
+        if (old) fileSessionManager.setMetadata(old.sessionId, { sdkSessionId: undefined });
         sessionRegistry.remove(key);
         return `session reset. ${old ? `old: ${old.messageCount} messages.` : ''} new session started.`;
       }
@@ -465,7 +467,8 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       const abortController = new AbortController();
       activeAbortControllers.set(sessionKey, abortController);
 
-      try {
+      // run the stream loop, returns result
+      async function executeStream(resumeId: string | undefined): Promise<AgentResult> {
         const session = sessionRegistry.get(sessionKey);
         const connected = getAllChannelStatuses()
           .filter(s => s.connected && ownerChatIds.has(s.channel))
@@ -473,7 +476,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         const gen = streamAgent({
           prompt,
           sessionId: session?.sessionId,
-          resumeId: session?.sdkSessionId,
+          resumeId,
           config,
           channel,
           connectedChannels: connected,
@@ -570,6 +573,10 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (m.type === 'result') {
             agentText = (m.result as string) || agentText;
             agentSessionId = (m.session_id as string) || agentSessionId;
+            if (agentSessionId && session) {
+              sessionRegistry.setSdkSessionId(sessionKey, agentSessionId);
+              fileSessionManager.setMetadata(session.sessionId, { sdkSessionId: agentSessionId });
+            }
             const u = m.usage as Record<string, number>;
             agentUsage = {
               inputTokens: u?.input_tokens || 0,
@@ -579,7 +586,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           }
         }
 
-        result = {
+        return {
           sessionId: agentSessionId || '',
           result: agentText,
           messages: [],
@@ -587,7 +594,28 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           durationMs: Date.now() - runStart,
           usedMessageTool,
         };
-        console.log(`[gateway] agent done: source=${source} result="${agentText.slice(0, 100)}..." cost=$${agentUsage.totalCostUsd?.toFixed(4) || '?'}`);
+      }
+
+      try {
+        const session = sessionRegistry.get(sessionKey);
+        const resumeId = session?.sdkSessionId;
+
+        try {
+          result = await executeStream(resumeId);
+        } catch (err) {
+          // if resume failed, clear stale sdkSessionId and retry fresh
+          if (resumeId) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.warn(`[gateway] resume failed for ${sessionKey}, retrying fresh: ${errMsg}`);
+            sessionRegistry.setSdkSessionId(sessionKey, undefined);
+            if (session) fileSessionManager.setMetadata(session.sessionId, { sdkSessionId: undefined });
+            result = await executeStream(undefined);
+          } else {
+            throw err;
+          }
+        }
+
+        console.log(`[gateway] agent done: source=${source} result="${result.result.slice(0, 100)}..." cost=$${result.usage.totalCostUsd?.toFixed(4) || '?'}`);
 
         broadcast({
           event: 'agent.result',
@@ -720,8 +748,33 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           const chatId = params?.chatId as string;
           if (!channel || !chatId) return { id, error: 'channel and chatId required' };
           const key = sessionRegistry.makeKey({ channel, chatId });
+          const oldSession = sessionRegistry.get(key);
+          if (oldSession) fileSessionManager.setMetadata(oldSession.sessionId, { sdkSessionId: undefined });
           sessionRegistry.remove(key);
           return { id, result: { reset: true, key } };
+        }
+
+        case 'sessions.resume': {
+          const sessionId = params?.sessionId as string;
+          if (!sessionId) return { id, error: 'sessionId required' };
+          const meta = fileSessionManager.getMetadata(sessionId);
+          if (!meta) return { id, error: 'session metadata not found' };
+
+          const ch = meta.channel || (params?.channel as string) || 'desktop';
+          const cid = meta.chatId || (params?.chatId as string) || 'default';
+          const ct = meta.chatType || 'dm';
+          const key = sessionRegistry.makeKey({ channel: ch, chatId: cid, chatType: ct });
+
+          const existing = sessionRegistry.get(key);
+          if (existing?.activeRun) return { id, error: 'cannot resume while agent is running' };
+
+          sessionRegistry.remove(key);
+          const entry = sessionRegistry.getOrCreate({ channel: ch, chatId: cid, chatType: ct, sessionId });
+          if (meta.sdkSessionId) {
+            sessionRegistry.setSdkSessionId(key, meta.sdkSessionId);
+          }
+
+          return { id, result: { resumed: true, key, sessionId, sdkSessionId: meta.sdkSessionId || null } };
         }
 
         case 'channels.status': {
