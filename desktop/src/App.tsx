@@ -161,7 +161,13 @@ export default function App() {
                           ? 'bg-secondary text-foreground'
                           : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                       }`}
-                      onClick={() => { setActiveTab(item.id); setSelectedFile(null); }}
+                      onClick={() => {
+                        if (item.id === 'chat' && activeTab === 'chat' && gw.currentSessionId) {
+                          gw.newSession();
+                        }
+                        setActiveTab(item.id);
+                        setSelectedFile(null);
+                      }}
                     >
                       {item.icon}
                       {item.label}

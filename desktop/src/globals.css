@@ -102,7 +102,6 @@
     overflow: hidden;
     height: 100vh;
     -webkit-app-region: no-drag;
-    user-select: none;
   }
 
   #root {
