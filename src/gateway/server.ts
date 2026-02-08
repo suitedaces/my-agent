@@ -179,8 +179,10 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       }
     }
 
-    // init tool log for this run
+    // init tool log and send redirect for this run
     toolLogs.set(session.key, { completed: [], current: null, lastEditAt: 0 });
+    const redirectKey = `${msg.channel}:${msg.chatId}`;
+    if (statusMsgId) setSendRedirect(redirectKey, statusMsgId);
 
     const body = batchedBodies
       ? `Multiple messages:\n${batchedBodies.map((b, i) => `${i + 1}. ${b}`).join('\n')}`
@@ -205,21 +207,23 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       channel: msg.channel,
     });
 
-    // clean up typing indicator and tool log
+    // clean up typing indicator, tool log, and send redirect
     if (typingInterval) clearInterval(typingInterval);
-    const log = toolLogs.get(session.key);
     toolLogs.delete(session.key);
+    const statusConsumed = !!statusMsgId && !hasSendRedirect(redirectKey);
+    clearSendRedirect(redirectKey);
 
     // edit status message with final response
     if (handler && statusMsgId && result?.result && result.result.trim() !== 'SILENT_REPLY') {
-      try {
-        if (!result.usedMessageTool) {
+      if (statusConsumed) {
+        // message tool already edited the status message, nothing to do
+      } else if (result.usedMessageTool) {
+        // sent to different chat or had media, delete status
+        try { await handler.delete(statusMsgId, msg.chatId); } catch {}
+      } else {
+        try {
           await handler.edit(statusMsgId, result.result, msg.chatId);
-        } else {
-          await handler.delete(statusMsgId, msg.chatId);
-        }
-      } catch {
-        if (!result.usedMessageTool) {
+        } catch {
           try { await handler.send(msg.chatId, result.result); } catch {}
         }
       }
