@@ -332,7 +332,7 @@ export function ChatView({ gateway }: Props) {
           {gateway.chatItems.length === 0 && (
             <AuroraBackground className="h-full min-h-[300px]">
               <div className="text-center space-y-2">
-                <div className="text-3xl opacity-30">_</div>
+                <img src="/robot.gif" alt="robot" className="w-24 h-24 mx-auto" />
                 <div className="text-muted-foreground text-sm">send a message to start</div>
                 <div className="text-[10px] text-muted-foreground">
                   {gateway.connectionState === 'connected' ? 'connected to gateway' : 'waiting for gateway...'}
