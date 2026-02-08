@@ -14,6 +14,7 @@ import { startHeartbeatRunner, type HeartbeatRunner } from '../heartbeat/runner.
 import { startCronRunner, loadCronJobs, saveCronJobs, type CronRunner } from '../cron/scheduler.js';
 import { checkSkillEligibility, loadAllSkills } from '../skills/loader.js';
 import type { InboundMessage } from '../channels/types.js';
+import { getAllChannelStatuses } from '../channels/index.js';
 import { getChannelHandler } from '../tools/messaging.js';
 import { setCronRunner } from '../tools/index.js';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -463,12 +464,16 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
       try {
         const session = sessionRegistry.get(sessionKey);
+        const connected = getAllChannelStatuses()
+          .filter(s => s.connected)
+          .map(s => s.channel);
         const gen = streamAgent({
           prompt,
           sessionId: session?.sessionId,
           resumeId: session?.sdkSessionId,
           config,
           channel,
+          connectedChannels: connected,
           extraContext,
           canUseTool,
           abortController,

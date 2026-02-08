@@ -100,9 +100,13 @@ function AskUserQuestionPanel({
   onAnswer: (requestId: string, answers: Record<string, string>) => void;
   onDismiss: () => void;
 }) {
+  const [step, setStep] = useState(0);
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [otherTexts, setOtherTexts] = useState<Record<string, string>>({});
   const [useOther, setUseOther] = useState<Record<string, boolean>>({});
+
+  const total = question.questions.length;
+  const q = question.questions[step];
 
   const handleSelect = (questionText: string, label: string, multiSelect: boolean) => {
     if (multiSelect) {
@@ -123,77 +127,101 @@ function AskUserQuestionPanel({
 
   const handleSubmit = () => {
     const answers: Record<string, string> = {};
-    for (const q of question.questions) {
-      if (useOther[q.question] && otherTexts[q.question]) {
-        answers[q.question] = otherTexts[q.question];
+    for (const qq of question.questions) {
+      if (useOther[qq.question] && otherTexts[qq.question]) {
+        answers[qq.question] = otherTexts[qq.question];
       } else {
-        answers[q.question] = selections[q.question] || '';
+        answers[qq.question] = selections[qq.question] || '';
       }
     }
     onAnswer(question.requestId, answers);
   };
 
-  const allAnswered = question.questions.every(q =>
-    (useOther[q.question] && otherTexts[q.question]) || selections[q.question]
-  );
+  const currentAnswered =
+    (useOther[q.question] && otherTexts[q.question]) || selections[q.question];
+  const isLast = step === total - 1;
 
   return (
     <div className="p-3 border-t border-primary bg-card shrink-0 space-y-3">
-      {question.questions.map((q, qi) => (
-        <div key={qi} className="space-y-2">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] text-primary">{q.header}</Badge>
-          <p className="text-[13px]">{q.question}</p>
-          <div className="flex flex-col gap-1">
-            {q.options.map((opt, oi) => {
-              const selected = q.multiSelect
-                ? (selections[q.question] || '').split(', ').includes(opt.label)
-                : selections[q.question] === opt.label && !useOther[q.question];
-              return (
-                <button
-                  key={oi}
+          {total > 1 && (
+            <div className="flex items-center gap-1">
+              {question.questions.map((_, i) => (
+                <div
+                  key={i}
                   className={cn(
-                    'flex flex-col items-start px-3 py-2 rounded-md border text-left w-full transition-colors',
-                    selected
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border bg-background hover:border-primary/50'
+                    'h-1.5 rounded-full transition-all',
+                    i === step ? 'w-4 bg-primary' : i < step ? 'w-1.5 bg-primary/50' : 'w-1.5 bg-muted-foreground/30'
                   )}
-                  onClick={() => handleSelect(q.question, opt.label, q.multiSelect)}
-                >
-                  <span className="text-xs font-semibold">{opt.label}</span>
-                  <span className="text-[11px] text-muted-foreground">{opt.description}</span>
-                </button>
-              );
-            })}
-            <button
-              className={cn(
-                'flex flex-col items-start px-3 py-2 rounded-md border text-left w-full transition-colors',
-                useOther[q.question]
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border bg-background hover:border-primary/50'
-              )}
-              onClick={() => {
-                setUseOther(prev => ({ ...prev, [q.question]: true }));
-                setSelections(prev => ({ ...prev, [q.question]: '' }));
-              }}
-            >
-              <span className="text-xs font-semibold">Other</span>
-              <span className="text-[11px] text-muted-foreground">type your own answer</span>
-            </button>
-          </div>
-          {useOther[q.question] && (
-            <input
-              className="w-full mt-1 px-3 py-2 bg-background border border-primary rounded-md text-xs outline-none placeholder:text-muted-foreground"
-              placeholder="type your answer..."
-              value={otherTexts[q.question] || ''}
-              onChange={e => setOtherTexts(prev => ({ ...prev, [q.question]: e.target.value }))}
-              autoFocus
-            />
+                />
+              ))}
+            </div>
           )}
         </div>
-      ))}
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onDismiss}>skip</Button>
-        <Button size="sm" className="h-7 text-xs" onClick={handleSubmit} disabled={!allAnswered}>answer</Button>
+        <p className="text-[13px]">{q.question}</p>
+        <div className="flex flex-col gap-1">
+          {q.options.map((opt, oi) => {
+            const selected = q.multiSelect
+              ? (selections[q.question] || '').split(', ').includes(opt.label)
+              : selections[q.question] === opt.label && !useOther[q.question];
+            return (
+              <button
+                key={oi}
+                className={cn(
+                  'flex flex-col items-start px-3 py-2 rounded-md border text-left w-full transition-colors',
+                  selected
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border bg-background hover:border-primary/50'
+                )}
+                onClick={() => handleSelect(q.question, opt.label, q.multiSelect)}
+              >
+                <span className="text-xs font-semibold">{opt.label}</span>
+                <span className="text-[11px] text-muted-foreground">{opt.description}</span>
+              </button>
+            );
+          })}
+          <button
+            className={cn(
+              'flex flex-col items-start px-3 py-2 rounded-md border text-left w-full transition-colors',
+              useOther[q.question]
+                ? 'border-primary bg-primary/10'
+                : 'border-border bg-background hover:border-primary/50'
+            )}
+            onClick={() => {
+              setUseOther(prev => ({ ...prev, [q.question]: true }));
+              setSelections(prev => ({ ...prev, [q.question]: '' }));
+            }}
+          >
+            <span className="text-xs font-semibold">Other</span>
+            <span className="text-[11px] text-muted-foreground">type your own answer</span>
+          </button>
+        </div>
+        {useOther[q.question] && (
+          <input
+            className="w-full mt-1 px-3 py-2 bg-background border border-primary rounded-md text-xs outline-none placeholder:text-muted-foreground"
+            placeholder="type your answer..."
+            value={otherTexts[q.question] || ''}
+            onChange={e => setOtherTexts(prev => ({ ...prev, [q.question]: e.target.value }))}
+            autoFocus
+          />
+        )}
+      </div>
+      <div className="flex justify-between">
+        <div>
+          {step > 0 && (
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setStep(s => s - 1)}>back</Button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={isLast ? handleSubmit : () => setStep(s => s + 1)}>skip</Button>
+          {isLast ? (
+            <Button size="sm" className="h-7 text-xs" onClick={handleSubmit} disabled={!currentAnswered}>answer</Button>
+          ) : (
+            <Button size="sm" className="h-7 text-xs" onClick={() => setStep(s => s + 1)} disabled={!currentAnswered}>next</Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -216,7 +244,7 @@ export function ChatView({ gateway }: Props) {
 
   const handleSend = async () => {
     const prompt = input.trim();
-    if (!prompt || sending) return;
+    if (!prompt || sending || gateway.pendingQuestion) return;
 
     setInput('');
     setSending(true);
@@ -353,7 +381,7 @@ export function ChatView({ gateway }: Props) {
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={gateway.connectionState === 'connected' ? 'type a message...' : 'waiting for gateway...'}
-            disabled={gateway.connectionState !== 'connected'}
+            disabled={gateway.connectionState !== 'connected' || !!gateway.pendingQuestion}
             className="flex-1 min-h-[40px] max-h-[200px] resize-none text-[13px]"
             rows={1}
           />
