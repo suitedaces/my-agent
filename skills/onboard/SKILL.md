@@ -52,7 +52,7 @@ you can ask up to 4 questions per tool call if they're related (e.g., name + tim
 
 ## phase 1: learn about the user
 
-start by asking their name. then ask if they want you to look them up online (linkedin, twitter/x, personal site) to pre-fill info. if they say yes, use WebSearch + WebFetch to pull key details (role, company, interests, location), confirm what you found, then only ask about stuff you couldn't find.
+start by asking their name. then ask if they want you to look them up online (linkedin, twitter/x, personal site) to pre-fill info. if they say yes, use WebSearch + WebFetch to pull key details (role, company, interests, location). don't stop at one result — dig deeper. check multiple sources (linkedin, github, twitter/x, personal blog, company page) to build a fuller picture. confirm what you found, then only ask about stuff you couldn't find.
 
 things to learn (ask or discover via lookup):
 
