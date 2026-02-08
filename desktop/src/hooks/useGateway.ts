@@ -670,7 +670,9 @@ export function useGateway(url = 'ws://localhost:18789') {
     setChatItems([]);
     activeSessionKeyRef.current = 'desktop:dm:default';
     localStorage.removeItem(SESSION_STORAGE_KEY);
-  }, []);
+    // reset session in gateway so next chat.send starts fresh
+    rpc('sessions.reset', { channel: 'desktop', chatId: 'default' }).catch(() => {});
+  }, [rpc]);
 
   const changeModel = useCallback(async (newModel: string) => {
     await rpc('config.set', { key: 'model', value: newModel });
