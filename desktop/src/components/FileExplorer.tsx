@@ -245,7 +245,7 @@ export function FileExplorer({ rpc, connected, onFileClick, onFileChange }: Prop
   const crumbs = viewRoot ? buildCrumbs(homeCwd, viewRoot) : [];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
         <span className="text-xs font-semibold">files</span>
         <Tooltip>
@@ -271,7 +271,7 @@ export function FileExplorer({ rpc, connected, onFileClick, onFileChange }: Prop
           ))}
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="py-1">
           {viewRoot ? renderEntries(viewRoot, 0) : <div className="text-[11px] text-muted-foreground p-3">loading...</div>}
         </div>

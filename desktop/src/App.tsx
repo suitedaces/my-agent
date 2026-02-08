@@ -142,11 +142,11 @@ export default function App() {
       </div>
 
       {/* main layout */}
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
+      <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0">
         {/* sidebar */}
-        <ResizablePanel defaultSize={15} minSize={10} maxSize={25} className="bg-card">
-          <div className="flex flex-col h-full">
-            <div className="flex-1 p-2">
+        <ResizablePanel defaultSize="15" minSize="10" maxSize="25" className="bg-card overflow-hidden">
+          <div className="flex flex-col h-full min-h-0">
+            <div className="shrink-0 p-2">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2.5 pt-3 pb-1">views</div>
               {NAV_ITEMS.map(item => (
                 <Tooltip key={item.id}>
@@ -181,7 +181,7 @@ export default function App() {
             {gw.sessions.length > 0 && (
               <>
                 <Separator />
-                <div className="px-2 pt-1">
+                <div className="shrink-0 px-2 pt-1">
                   <div className="flex items-center px-2.5 py-1">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground">sessions</span>
                     <select
@@ -196,7 +196,7 @@ export default function App() {
                     </select>
                   </div>
                 </div>
-                <ScrollArea className="max-h-[200px] px-2 pb-2">
+                <ScrollArea className="flex-1 min-h-0 px-2 pb-2">
                   {filteredSessions.slice(0, 30).map(s => (
                     <button
                       key={s.id}
@@ -221,8 +221,8 @@ export default function App() {
               </>
             )}
 
-            <Separator />
-            <div className="px-3 py-2 text-[10px] text-muted-foreground">
+            <Separator className="shrink-0" />
+            <div className="shrink-0 px-3 py-2 text-[10px] text-muted-foreground">
               {gw.currentSessionId ? `session: ${gw.currentSessionId.slice(0, 8)}` : 'no session'}
             </div>
           </div>
@@ -231,8 +231,8 @@ export default function App() {
         <ResizableHandle withHandle />
 
         {/* main content */}
-        <ResizablePanel defaultSize={showFiles ? 55 : 85} minSize={30}>
-          <div className="flex flex-col h-full overflow-hidden">
+        <ResizablePanel defaultSize={showFiles ? "55" : "85"} minSize="30" className="overflow-hidden">
+          <div className="flex flex-col h-full min-h-0">
             {renderView()}
           </div>
         </ResizablePanel>
@@ -241,7 +241,7 @@ export default function App() {
         {showFiles && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={30} minSize={15} maxSize={45}>
+            <ResizablePanel defaultSize="30" minSize="15" maxSize="45" className="overflow-hidden">
               <FileExplorer
                 rpc={gw.rpc}
                 connected={gw.connectionState === 'connected'}

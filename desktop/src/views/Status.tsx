@@ -23,7 +23,7 @@ export function StatusView({ gateway }: Props) {
   const hasToken = !!(window as any).electronAPI?.getGatewayToken?.() || !!(window as any).electronAPI?.gatewayToken || !!localStorage.getItem('my-agent:gateway-token');
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
         <span className="font-semibold text-sm">Status</span>
         <Badge variant={gateway.connectionState === 'connected' ? 'default' : 'destructive'}>
@@ -31,7 +31,7 @@ export function StatusView({ gateway }: Props) {
         </Badge>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4">
           <BentoGrid className="grid-cols-2 gap-3">
             <BentoGridItem className="col-span-1">

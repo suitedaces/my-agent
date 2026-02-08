@@ -157,7 +157,7 @@ export function Automations({ gateway }: AutomationsProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
         <span className="font-semibold text-sm">Automations</span>
         <Badge variant="outline" className="text-[10px]">{jobs.length}</Badge>
@@ -171,7 +171,7 @@ export function Automations({ gateway }: AutomationsProps) {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-4">
           {showAddForm && (
             <Card className="border-primary/50">

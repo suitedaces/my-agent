@@ -11,7 +11,7 @@ export function BentoGrid({ children, className }: { children: React.ReactNode; 
 export function BentoGridItem({ children, className, colSpan }: { children: React.ReactNode; className?: string; colSpan?: number }) {
   return (
     <div className={cn(
-      "rounded-lg border border-border bg-card p-4",
+      "rounded-lg",
       colSpan === 2 && "md:col-span-2",
       className
     )}>

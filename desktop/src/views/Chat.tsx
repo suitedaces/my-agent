@@ -280,7 +280,7 @@ export function ChatView({ gateway }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* header */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
         <span className="font-semibold text-sm">Chat</span>
@@ -299,10 +299,10 @@ export function ChatView({ gateway }: Props) {
       </div>
 
       {/* messages */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="px-4 py-3">
           {gateway.chatItems.length === 0 && (
-            <AuroraBackground className="h-[calc(100vh-200px)]">
+            <AuroraBackground className="h-full min-h-[300px]">
               <div className="text-center space-y-2">
                 <div className="text-3xl opacity-30">_</div>
                 <div className="text-muted-foreground text-sm">send a message to start</div>

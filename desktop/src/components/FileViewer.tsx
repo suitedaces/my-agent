@@ -102,14 +102,14 @@ export function FileViewer({ filePath, rpc, onClose }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
         <span className="font-semibold text-sm flex-1 truncate">{fileName}</span>
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onClose}>
           <X className="w-3.5 h-3.5" />
         </Button>
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto">
         {renderViewer()}
       </div>
     </div>
