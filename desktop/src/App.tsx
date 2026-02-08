@@ -7,6 +7,7 @@ import { ToolsView } from './views/Tools';
 import { FileExplorer } from './components/FileExplorer';
 import { FileViewer } from './components/FileViewer';
 import { StatusView } from './views/Status';
+import { SettingsView } from './views/Settings';
 import { Toaster, toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,12 +18,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { FlipWords } from '@/components/aceternity/flip-words';
 import {
-  MessageSquare, Phone, Send, Zap, Wrench, Activity,
+  MessageSquare, Phone, Send, Zap, Wrench, Activity, Settings2,
   FolderOpen, Plus, ChevronRight
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
-type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'tools' | 'status';
+type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'tools' | 'status' | 'settings';
 type SessionFilter = 'all' | 'desktop' | 'telegram' | 'whatsapp';
 
 const NAV_ITEMS: { id: NavTab; label: string; icon: React.ReactNode }[] = [
@@ -32,6 +33,7 @@ const NAV_ITEMS: { id: NavTab; label: string; icon: React.ReactNode }[] = [
   { id: 'automation', label: 'Auto', icon: <Zap className="w-3.5 h-3.5" /> },
   { id: 'tools', label: 'Tools', icon: <Wrench className="w-3.5 h-3.5" /> },
   { id: 'status', label: 'Status', icon: <Activity className="w-3.5 h-3.5" /> },
+  { id: 'settings', label: 'Settings', icon: <Settings2 className="w-3.5 h-3.5" /> },
 ];
 
 export default function App() {
@@ -85,6 +87,8 @@ export default function App() {
         return <ToolsView gateway={gw} />;
       case 'status':
         return <StatusView gateway={gw} />;
+      case 'settings':
+        return <SettingsView gateway={gw} />;
     }
   };
 

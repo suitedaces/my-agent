@@ -208,6 +208,7 @@ export function useGateway(url = 'ws://localhost:18789') {
   const [channelStatuses, setChannelStatuses] = useState<ChannelStatusInfo[]>([]);
   const [agentStatus, setAgentStatus] = useState<string>('idle');
   const [model, setModel] = useState<string>('');
+  const [configData, setConfigData] = useState<Record<string, unknown> | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [pendingQuestion, setPendingQuestion] = useState<AskUserQuestion | null>(null);
@@ -431,8 +432,27 @@ export function useGateway(url = 'ws://localhost:18789') {
       }
 
       case 'status.update': {
-        const d = data as { activeRun?: boolean; source?: string };
+        const d = data as { activeRun?: boolean; source?: string; model?: string };
+        if (d.model) setModel(d.model);
         setAgentStatus(d.activeRun ? `running (${d.source || 'agent'})` : 'idle');
+        break;
+      }
+
+      case 'config.update': {
+        const d = data as { key: string; value: unknown };
+        setConfigData(prev => {
+          if (!prev) return prev;
+          const updated = { ...prev };
+          // handle nested keys like security.approvalMode, browser.enabled
+          const parts = d.key.split('.');
+          if (parts.length === 1) {
+            updated[d.key] = d.value;
+          } else {
+            const [section, field] = parts;
+            updated[section] = { ...(updated[section] as Record<string, unknown> || {}), [field]: d.value };
+          }
+          return updated;
+        });
         break;
       }
 
@@ -484,8 +504,9 @@ export function useGateway(url = 'ws://localhost:18789') {
           resolve: () => {
             setConnectionState('connected');
             rpc('config.get').then((res) => {
-              const c = res as { model?: string };
-              if (c.model) setModel(c.model);
+              const c = res as Record<string, unknown>;
+              setConfigData(c);
+              if (c.model) setModel(c.model as string);
             }).catch(() => {});
             rpc('sessions.list').then((res) => {
               const arr = res as SessionInfo[];
@@ -656,6 +677,29 @@ export function useGateway(url = 'ws://localhost:18789') {
     setModel(newModel);
   }, [rpc]);
 
+  const setConfig = useCallback(async (key: string, value: unknown) => {
+    // optimistic local update
+    setConfigData(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev };
+      const parts = key.split('.');
+      if (parts.length === 1) {
+        updated[key] = value;
+      } else {
+        const [section, field] = parts;
+        updated[section] = { ...(updated[section] as Record<string, unknown> || {}), [field]: value };
+      }
+      return updated;
+    });
+    await rpc('config.set', { key, value });
+  }, [rpc]);
+
+  const refreshConfig = useCallback(async () => {
+    const res = await rpc('config.get') as Record<string, unknown>;
+    setConfigData(res);
+    if (res.model) setModel(res.model as string);
+  }, [rpc]);
+
   const getSecuritySenders = useCallback(async () => {
     return await rpc('security.senders.list') as { telegram: string[]; whatsapp: string[] };
   }, [rpc]);
@@ -702,6 +746,9 @@ export function useGateway(url = 'ws://localhost:18789') {
     setCurrentSessionId,
     model,
     changeModel,
+    configData,
+    setConfig,
+    refreshConfig,
     answerQuestion,
     dismissQuestion,
     pendingApprovals,

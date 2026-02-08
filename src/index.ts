@@ -170,28 +170,33 @@ async function interactiveMode(config: Awaited<ReturnType<typeof loadConfig>>): 
           config,
         });
 
-        let lastText = '';
+        let sdkSessionId = '';
+        let totalCostUsd = 0;
         for await (const msg of gen) {
           const m = msg as Record<string, unknown>;
 
-          // print streaming text
           if (m.type === 'stream_event') {
             const event = m.event as Record<string, unknown>;
             if (event.type === 'content_block_delta') {
               const delta = event.delta as Record<string, unknown>;
               if (delta.type === 'text_delta') {
                 process.stdout.write(delta.text as string);
-                lastText += delta.text;
               }
             }
           }
+
+          if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
+            sdkSessionId = m.session_id as string;
+          }
+          if (m.type === 'result') {
+            sdkSessionId = (m.session_id as string) || sdkSessionId;
+            totalCostUsd = (m.total_cost_usd as number) || 0;
+          }
         }
 
-        const result = await gen.return(undefined as any);
-        if (result.value && typeof result.value === 'object' && 'sessionId' in result.value) {
-          const r = result.value as { sessionId: string; usage: { totalCostUsd: number } };
-          currentSessionId = r.sessionId;
-          console.log(`\n\n[Session: ${currentSessionId}] [Cost: $${r.usage.totalCostUsd.toFixed(4)}]\n`);
+        if (sdkSessionId) {
+          currentSessionId = currentSessionId || sdkSessionId;
+          console.log(`\n\n[Session: ${currentSessionId}] [Cost: $${totalCostUsd.toFixed(4)}]\n`);
         }
       } catch (err) {
         console.error('Error:', err);
@@ -371,6 +376,8 @@ Commands (interactive mode):
       config,
     });
 
+    let sdkSessionId = '';
+    let totalCostUsd = 0;
     for await (const msg of gen) {
       const m = msg as Record<string, unknown>;
 
@@ -383,11 +390,18 @@ Commands (interactive mode):
           }
         }
       }
+
+      if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
+        sdkSessionId = m.session_id as string;
+      }
+      if (m.type === 'result') {
+        sdkSessionId = (m.session_id as string) || sdkSessionId;
+        totalCostUsd = (m.total_cost_usd as number) || 0;
+      }
     }
 
-    const result = await gen.return(undefined as any);
-    if (result.value && typeof result.value === 'object' && 'sessionId' in result.value) {
-      console.log(`\n\n[Session: ${(result.value as { sessionId: string }).sessionId}]`);
+    if (sdkSessionId) {
+      console.log(`\n\n[Session: ${sdkSessionId}] [Cost: $${totalCostUsd.toFixed(4)}]`);
     }
   } else {
     const result = await runAgent({
