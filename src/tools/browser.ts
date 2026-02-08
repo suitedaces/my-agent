@@ -21,6 +21,7 @@ import {
   browserCookies,
   browserEvaluate,
   browserPdf,
+  browserPromptLogin,
 } from '../browser/actions.js';
 
 // browser config loaded at runtime, set by gateway/startup
@@ -32,12 +33,13 @@ export function setBrowserConfig(config: BrowserConfig) {
 
 export const browserTool = tool(
   'browser',
-  'Control web browser. Actions: status, start, stop, open, snapshot, screenshot, click, type, fill, fill_form, select, press, hover, wait, tabs, close_tab, navigate, cookies, evaluate, pdf. Use snapshot to get element refs (e1, e2...), then use refs for click/type/fill. Refs invalidate after navigation — re-snapshot after clicking links.',
+  'Control web browser. Actions: status, start, stop, open, snapshot, screenshot, click, type, fill, fill_form, select, press, hover, wait, tabs, close_tab, navigate, cookies, evaluate, pdf, prompt_login. Use snapshot to get element refs (e1, e2...), then use refs for click/type/fill. Refs invalidate after navigation — re-snapshot after clicking links. Use prompt_login when a site requires login — it takes a screenshot and tells you to ask the user to log in manually.',
   {
     action: z.enum([
       'status', 'start', 'stop', 'open', 'snapshot', 'screenshot',
       'click', 'type', 'fill', 'fill_form', 'select', 'press', 'hover',
       'wait', 'tabs', 'close_tab', 'navigate', 'cookies', 'evaluate', 'pdf',
+      'prompt_login',
     ]),
     url: z.string().optional().describe('URL to navigate to (for open/navigate)'),
     ref: z.string().optional().describe('Element ref from snapshot (e.g. "e1")'),
@@ -165,12 +167,20 @@ export const browserTool = tool(
           result = await browserPdf(args.path);
           break;
 
+        case 'prompt_login':
+          result = await browserPromptLogin(browserConfig);
+          break;
+
         default:
           return { content: [{ type: 'text' as const, text: `Unknown action: ${args.action}` }], isError: true };
       }
 
+      const content: any[] = [{ type: 'text' as const, text: result.text }];
+      if (result.image) {
+        content.push({ type: 'image' as const, data: result.image, mimeType: 'image/png' });
+      }
       return {
-        content: [{ type: 'text' as const, text: result.text }],
+        content,
         ...(result.isError ? { isError: true } : {}),
       };
     } catch (e: any) {

@@ -247,8 +247,9 @@ If something needs attention, do NOT include HEARTBEAT_OK — reply with the ale
 Use the browser tool for web automation. Workflow: open → snapshot → interact → re-snapshot.
 - snapshot returns element refs (e1, e2...). Use refs for click/type/fill/select.
 - Refs invalidate after navigation. Always re-snapshot after clicking links.
-- User logs in manually in the persistent browser profile. Agent reuses authenticated sessions.
-- Do not ask for credentials. If a site needs login, tell the user to log in manually.`);
+- The browser uses a persistent profile — authenticated sessions carry over.
+- **Login handling:** If you detect a login page (login form, sign-in button, auth wall), use \`browser\` with \`action: prompt_login\`. This takes a screenshot the user can see. Then use AskUserQuestion to ask the user to log in in the browser window and click Done when finished. After they confirm, use snapshot to verify you're logged in and continue.
+- Never ask for credentials or try to fill login forms yourself.`);
   }
 
   // extra context

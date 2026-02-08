@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { ensureBrowser, closeBrowser, isRunning, getPage, getContext, setActivePage, type BrowserConfig } from './manager.js';
 import { generateSnapshot, resolveRef, clearRefs } from './refs.js';
 
-type ActionResult = {
+export type ActionResult = {
   text: string;
   isError?: boolean;
+  image?: string; // raw base64 PNG data (no data: prefix)
 };
 
 function ok(text: string): ActionResult {
@@ -68,17 +69,31 @@ export async function browserSnapshot(config: BrowserConfig, opts: { interactive
 export async function browserScreenshot(config: BrowserConfig, opts: { fullPage?: boolean; ref?: string } = {}): Promise<ActionResult> {
   const page = await ensureBrowser(config);
 
-  const outPath = join(tmpdir(), `browser-screenshot-${Date.now()}.png`);
-
+  let buffer: Buffer;
   if (opts.ref) {
     const locator = resolveRef(opts.ref);
     if (!locator) return err(`Ref ${opts.ref} not found. Run snapshot first.`);
-    await locator.screenshot({ path: outPath });
+    buffer = await locator.screenshot();
   } else {
-    await page.screenshot({ path: outPath, fullPage: opts.fullPage });
+    buffer = await page.screenshot({ fullPage: opts.fullPage });
   }
 
-  return ok(`Screenshot saved: ${outPath}`);
+  const title = await page.title();
+  const url = page.url();
+  return { text: `Screenshot of: ${url} (${title})`, image: buffer.toString('base64') };
+}
+
+// prompt_login — screenshot + ask user to log in
+export async function browserPromptLogin(config: BrowserConfig): Promise<ActionResult> {
+  const page = await ensureBrowser(config);
+  const url = page.url();
+  const title = await page.title();
+  const buffer = await page.screenshot();
+
+  return {
+    text: `Login needed at: ${url} (${title})\nScreenshot attached. Ask the user to log in manually in the browser window, then use snapshot to verify.`,
+    image: buffer.toString('base64'),
+  };
 }
 
 // click

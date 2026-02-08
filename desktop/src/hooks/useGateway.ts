@@ -13,7 +13,7 @@ const TOOL_PENDING_TEXT: Record<string, string> = {
   WebFetch: 'fetching url', WebSearch: 'searching web', Task: 'running task',
   AskUserQuestion: 'asking question', TodoWrite: 'updating tasks',
   NotebookEdit: 'editing notebook', message: 'sending message',
-  screenshot: 'taking screenshot', schedule_reminder: 'scheduling reminder',
+  screenshot: 'taking screenshot', browser: 'using browser', schedule_reminder: 'scheduling reminder',
   schedule_recurring: 'scheduling task', schedule_cron: 'scheduling cron job',
   list_reminders: 'listing reminders', cancel_reminder: 'cancelling reminder',
 };
@@ -23,7 +23,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 export type ChatItem =
   | { type: 'user'; content: string; timestamp: number }
   | { type: 'text'; content: string; streaming?: boolean; timestamp: number }
-  | { type: 'tool_use'; id: string; name: string; input: string; output?: string; is_error?: boolean; streaming?: boolean; timestamp: number }
+  | { type: 'tool_use'; id: string; name: string; input: string; output?: string; imageData?: string; is_error?: boolean; streaming?: boolean; timestamp: number }
   | { type: 'thinking'; content: string; streaming?: boolean; timestamp: number }
   | { type: 'result'; cost?: number; timestamp: number }
   | { type: 'error'; content: string; timestamp: number };
@@ -392,7 +392,7 @@ export function useGateway(url = 'ws://localhost:18789') {
       }
 
       case 'agent.tool_result': {
-        const d = data as { sessionKey?: string; tool_use_id: string; content: string; is_error?: boolean };
+        const d = data as { sessionKey?: string; tool_use_id: string; content: string; imageData?: string; is_error?: boolean };
         if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         setChatItems(prev => {
           let idx = -1;
@@ -403,7 +403,7 @@ export function useGateway(url = 'ws://localhost:18789') {
           if (idx >= 0) {
             const updated = [...prev];
             const item = updated[idx] as Extract<ChatItem, { type: 'tool_use' }>;
-            updated[idx] = { ...item, output: d.content, is_error: d.is_error };
+            updated[idx] = { ...item, output: d.content, imageData: d.imageData, is_error: d.is_error };
             return updated;
           }
           return prev;

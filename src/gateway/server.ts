@@ -618,6 +618,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
               for (const block of content) {
                 if (block.type === 'tool_result') {
                   let resultText = '';
+                  let imageData: string | undefined;
                   if (typeof block.content === 'string') {
                     resultText = block.content;
                   } else if (Array.isArray(block.content)) {
@@ -625,6 +626,12 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
                       .filter((c: any) => c.type === 'text')
                       .map((c: any) => c.text)
                       .join('\n');
+                    const img = block.content.find((c: any) => c.type === 'image');
+                    if (img) {
+                      const data = img.data || img.source?.data;
+                      const mime = img.mimeType || img.source?.media_type || 'image/png';
+                      if (data) imageData = `data:${mime};base64,${data}`;
+                    }
                   }
                   broadcast({
                     event: 'agent.tool_result',
@@ -633,6 +640,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
                       sessionKey,
                       tool_use_id: block.tool_use_id,
                       content: resultText.slice(0, 2000),
+                      imageData,
                       is_error: block.is_error || false,
                       timestamp: Date.now(),
                     },

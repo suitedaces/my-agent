@@ -17,6 +17,7 @@ export type ToolUIProps = {
   name: string
   input: string // raw JSON string
   output?: string
+  imageData?: string // base64 data URI for images
   isError?: boolean
   streaming?: boolean
 }

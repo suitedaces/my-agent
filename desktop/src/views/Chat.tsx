@@ -81,6 +81,7 @@ function ToolUseItem({ item }: { item: Extract<ChatItem, { type: 'tool_use' }> }
               name={item.name}
               input={item.input}
               output={item.output}
+              imageData={item.imageData}
               isError={item.is_error}
               streaming={item.streaming}
             />
