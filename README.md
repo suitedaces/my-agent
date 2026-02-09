@@ -2,6 +2,9 @@
 
 Your personal AI agent that lives on WhatsApp, Telegram, and a desktop app. It can browse the web, send messages, manage files, run code, and handle scheduled tasks — all with persistent memory across conversations.
 
+<img width="4336" height="2644" alt="image" src="https://github.com/user-attachments/assets/8ebfb9cf-0e41-45b9-9fed-26b5a9d14d5c" />
+
+
 ## What Can It Do?
 
 - **Chat anywhere** — Talk to the same agent on WhatsApp, Telegram, or the desktop app. It remembers everything across channels.
