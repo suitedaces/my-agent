@@ -4,6 +4,7 @@ import { ChatView } from './views/Chat';
 import { ChannelView } from './views/Channel';
 import { Automations } from './components/Automations';
 import { FileExplorer } from './components/FileExplorer';
+import { Progress } from './components/Progress';
 import { FileViewer } from './components/FileViewer';
 import { SettingsView } from './views/Settings';
 import { SoulView } from './views/Soul';
@@ -21,7 +22,7 @@ type NavTab = 'chat' | 'channels' | 'automation' | 'memory' | 'settings';
 type SessionFilter = 'all' | 'desktop' | 'telegram' | 'whatsapp';
 
 const NAV_ITEMS: { id: NavTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'chat', label: 'Chat', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  { id: 'chat', label: 'Task', icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { id: 'channels', label: 'Channels', icon: <Radio className="w-3.5 h-3.5" /> },
   { id: 'automation', label: 'Automations', icon: <Zap className="w-3.5 h-3.5" /> },
   { id: 'memory', label: 'Memory', icon: <Brain className="w-3.5 h-3.5" /> },
@@ -81,9 +82,9 @@ export default function App() {
   };
 
   const channelIcon = (ch?: string) => {
-    if (ch === 'telegram') return 'T';
-    if (ch === 'whatsapp') return 'W';
-    return '>';
+    if (ch === 'whatsapp') return <img src="/whatsapp.png" className="w-3 h-3" alt="W" />;
+    if (ch === 'telegram') return <img src="/telegram.png" className="w-3 h-3" alt="T" />;
+    return <MessageSquare className="w-3 h-3 opacity-50" />;
   };
 
   const statusDotColor = gw.connectionState === 'connected'
@@ -180,7 +181,7 @@ export default function App() {
                       onClick={() => handleViewSession(s.id, s.channel, s.chatId)}
                       title={`${s.channel || 'desktop'} | ${s.messageCount} msgs | ${new Date(s.updatedAt).toLocaleString()}`}
                     >
-                      <span className="text-[9px] font-bold w-3 opacity-50">{channelIcon(s.channel)}</span>
+                      <span className="w-3 h-3 shrink-0 flex items-center justify-center">{channelIcon(s.channel)}</span>
                       <span className="truncate flex-1 text-left">
                         {s.senderName || s.chatId || s.id.slice(8, 16)}
                       </span>
@@ -221,7 +222,8 @@ export default function App() {
         {showFiles && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize="30%" minSize="15%" maxSize="45%" className="overflow-hidden">
+            <ResizablePanel defaultSize="30%" minSize="15%" maxSize="45%" className="overflow-hidden flex flex-col">
+              <Progress items={gw.progress} />
               <FileExplorer
                 rpc={gw.rpc}
                 connected={gw.connectionState === 'connected'}

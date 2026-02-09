@@ -207,7 +207,7 @@ export function SoulView({ gateway, onSetupChat }: Props) {
                   onClick={() => onSetupChat(SETUP_PROMPTS[activeFile])}
                 >
                   <MessageSquare className="w-3 h-3 mr-1.5" />
-                  set up with chat
+                  set up with task
                 </Button>
               )}
               <Button

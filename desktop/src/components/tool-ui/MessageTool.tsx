@@ -11,13 +11,12 @@ export function MessageTool({ input, output, isError }: ToolUIProps) {
   const message = parsed.message || ""
   const action = parsed.action || "send"
 
-  const channelIcon = channel === "whatsapp" ? "W" : channel === "telegram" ? "T" : ">"
+  const channelImg = channel === "whatsapp" ? "/whatsapp.png" : channel === "telegram" ? "/telegram.png" : null
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-xs">
-        <MessageSquare className="w-3.5 h-3.5 text-success" />
-        <Badge variant="outline" className="text-[9px] h-4 font-bold">{channelIcon}</Badge>
+        {channelImg ? <img src={channelImg} className="w-3.5 h-3.5" alt={channel} /> : <MessageSquare className="w-3.5 h-3.5 text-success" />}
         <span className="text-muted-foreground truncate">{target}</span>
         <Badge variant={isError ? "destructive" : "outline"} className="text-[9px] h-4 ml-auto">
           {action === "send" ? (isError ? "failed" : "sent") : action}

@@ -316,14 +316,14 @@ export function ChatView({ gateway }: Props) {
       {/* header */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
         <span className="text-muted-foreground text-[11px] font-mono">
-          {gateway.currentSessionId ? gateway.currentSessionId.slice(0, 8) : 'new conversation'}
+          {gateway.currentSessionId ? gateway.currentSessionId.slice(0, 8) : 'new task'}
         </span>
         <Button
           variant="ghost"
           size="sm"
           className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
           onClick={gateway.newSession}
-          title="new session"
+          title="new task"
         >
           <Plus className="w-3.5 h-3.5" />
         </Button>

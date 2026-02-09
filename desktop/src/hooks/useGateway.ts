@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // strip mcp__<server>__ prefix from SDK tool names
 function cleanToolName(name: string): string {
@@ -27,6 +27,8 @@ export type ChatItem =
   | { type: 'thinking'; content: string; streaming?: boolean; timestamp: number }
   | { type: 'result'; cost?: number; timestamp: number }
   | { type: 'error'; content: string; timestamp: number };
+
+export type ProgressItem = { content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string };
 
 export type ChannelMessage = {
   id: string;
@@ -808,9 +810,20 @@ export function useGateway(url = 'ws://localhost:18789') {
     setWhatsappLoginError(null);
   }, [rpc]);
 
+  const progress = useMemo<ProgressItem[]>(() => {
+    for (let i = chatItems.length - 1; i >= 0; i--) {
+      const item = chatItems[i];
+      if (item.type === 'tool_use' && item.name === 'TodoWrite' && !item.streaming) {
+        try { return JSON.parse(item.input).todos || []; } catch { return []; }
+      }
+    }
+    return [];
+  }, [chatItems]);
+
   return {
     connectionState,
     chatItems,
+    progress,
     channelMessages,
     channelStatuses,
     agentStatus,

@@ -1,7 +1,7 @@
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -16,7 +16,6 @@ export type BrowserConfig = {
 };
 
 const DEFAULT_CDP_PORT = 19222;
-const DEFAULT_PROFILE_DIR = join(homedir(), '.dorabot', 'browser', 'profile');
 
 // singleton state
 let browser: Browser | null = null;
@@ -24,37 +23,120 @@ let context: BrowserContext | null = null;
 let activePage: Page | null = null;
 let browserProcess: ReturnType<typeof import('node:child_process').spawn> | null = null;
 
-// detect chromium-based browser on macOS
-const BROWSER_PATHS = [
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+// browser executable → real macOS user data dir
+const BROWSER_INFO: { exec: string; dataDir: string; appName: string }[] = [
+  {
+    exec: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    dataDir: join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome'),
+    appName: 'Google Chrome',
+  },
+  {
+    exec: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+    dataDir: join(homedir(), 'Library', 'Application Support', 'BraveSoftware', 'Brave-Browser'),
+    appName: 'Brave Browser',
+  },
+  {
+    exec: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    dataDir: join(homedir(), 'Library', 'Application Support', 'Microsoft Edge'),
+    appName: 'Microsoft Edge',
+  },
+  {
+    exec: '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    dataDir: join(homedir(), 'Library', 'Application Support', 'Chromium'),
+    appName: 'Chromium',
+  },
+  {
+    exec: '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+    dataDir: join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome Canary'),
+    appName: 'Google Chrome Canary',
+  },
 ];
 
-export function findChromium(override?: string): string | null {
-  if (override && existsSync(override)) return override;
-  for (const p of BROWSER_PATHS) {
-    if (existsSync(p)) return p;
+export function findChromium(override?: string): { exec: string; dataDir: string; appName: string } | null {
+  if (override && existsSync(override)) {
+    // custom path — check if it matches a known browser for profile dir
+    const known = BROWSER_INFO.find(b => b.exec === override);
+    return known || { exec: override, dataDir: join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome'), appName: 'Google Chrome' };
+  }
+  for (const b of BROWSER_INFO) {
+    if (existsSync(b.exec)) return b;
   }
   return null;
 }
 
+// check if chrome already has CDP active via DevToolsActivePort file
+function readDevToolsPort(dataDir: string): number | null {
+  const portFile = join(dataDir, 'DevToolsActivePort');
+  try {
+    const content = readFileSync(portFile, 'utf-8');
+    const port = parseInt(content.split('\n')[0], 10);
+    return isNaN(port) ? null : port;
+  } catch {
+    return null;
+  }
+}
+
+// check if a process matching the app name is running
+async function isAppRunning(appName: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync('pgrep', ['-f', appName]);
+    return stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// gracefully quit a macOS app and wait for it to exit
+async function quitApp(appName: string, timeoutMs = 5000): Promise<void> {
+  try {
+    await execFileAsync('osascript', ['-e', `tell application "${appName}" to quit`]);
+  } catch {
+    // app might not be running or not respond to osascript
+  }
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!(await isAppRunning(appName))) return;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  // force kill as fallback
+  try { await execFileAsync('pkill', ['-f', appName]); } catch {}
+}
+
 export async function launchBrowser(config: BrowserConfig = {}): Promise<void> {
-  if (browser) return; // already running
+  if (browser) return;
 
   const port = config.cdpPort || DEFAULT_CDP_PORT;
-  const profileDir = config.profileDir || DEFAULT_PROFILE_DIR;
-  const execPath = findChromium(config.executablePath);
+  const info = findChromium(config.executablePath);
 
-  mkdirSync(profileDir, { recursive: true });
-
-  if (!execPath) {
+  if (!info) {
     throw new Error('No Chromium-based browser found. Install Chrome, Brave, or Edge, or set browser.executablePath in config.');
   }
 
-  // launch browser with remote debugging
+  const profileDir = config.profileDir || info.dataDir;
+
+  // check if browser is already running with CDP
+  const existingPort = readDevToolsPort(profileDir);
+  if (existingPort) {
+    try {
+      const cdpUrl = `http://127.0.0.1:${existingPort}`;
+      browser = await chromium.connectOverCDP(cdpUrl);
+      const contexts = browser.contexts();
+      context = contexts[0] || await browser.newContext();
+      const pages = context.pages();
+      activePage = pages[0] || await context.newPage();
+      console.log(`[browser] connected to existing CDP on port ${existingPort}`);
+      return;
+    } catch {
+      // stale port file, continue to launch
+    }
+  }
+
+  // if browser is running without CDP, quit it first
+  if (await isAppRunning(info.appName)) {
+    console.log(`[browser] ${info.appName} running without CDP, restarting with remote debugging...`);
+    await quitApp(info.appName);
+  }
+
   const { spawn } = await import('node:child_process');
   const args = [
     `--remote-debugging-port=${port}`,
@@ -67,22 +149,21 @@ export async function launchBrowser(config: BrowserConfig = {}): Promise<void> {
     args.push('--headless=new');
   }
 
-  browserProcess = spawn(execPath, args, {
+  browserProcess = spawn(info.exec, args, {
     stdio: 'ignore',
     detached: true,
   });
   browserProcess.unref();
 
-  // wait for CDP to be ready
   const cdpUrl = `http://127.0.0.1:${port}`;
   await waitForCdp(cdpUrl, 10_000);
 
-  // connect playwright
   browser = await chromium.connectOverCDP(cdpUrl);
   const contexts = browser.contexts();
   context = contexts[0] || await browser.newContext();
   const pages = context.pages();
   activePage = pages[0] || await context.newPage();
+  console.log(`[browser] launched ${info.appName} with CDP on port ${port}, profile: ${profileDir}`);
 }
 
 export async function connectToExisting(config: BrowserConfig = {}): Promise<void> {

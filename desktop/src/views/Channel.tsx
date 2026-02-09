@@ -186,7 +186,10 @@ export function ChannelView({ channel, gateway, onViewSession, onSwitchChannel }
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}
               >
-                {ch === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
+                <span className="flex items-center gap-1.5">
+                  <img src={ch === 'whatsapp' ? '/whatsapp.png' : '/telegram.png'} className="w-3.5 h-3.5" alt="" />
+                  {ch === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
+                </span>
               </button>
             ))}
           </div>
