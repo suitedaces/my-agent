@@ -482,13 +482,15 @@ async function getSelectedPage(): Promise<Page | null> {
 async function collectTraceMetrics(page: Page): Promise<TraceMetrics> {
   try {
     const metrics = await page.evaluate(() => {
-      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-      const paints = performance.getEntriesByType('paint');
-      const fcp = paints.find(p => p.name === 'first-contentful-paint')?.startTime ?? null;
-      const lcpEntries = performance.getEntriesByType('largest-contentful-paint') as PerformanceEntry[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const perf = performance as any;
+      const nav = perf.getEntriesByType('navigation')[0] as { responseStart?: number; domContentLoadedEventEnd?: number; loadEventEnd?: number } | undefined;
+      const paints = perf.getEntriesByType('paint') as Array<{ name: string; startTime: number }>;
+      const fcp = paints.find((p: { name: string }) => p.name === 'first-contentful-paint')?.startTime ?? null;
+      const lcpEntries = perf.getEntriesByType('largest-contentful-paint') as Array<{ startTime: number }>;
       const lcp = lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null;
-      const shifts = performance.getEntriesByType('layout-shift') as Array<PerformanceEntry & { value?: number; hadRecentInput?: boolean }>;
-      const cls = shifts.reduce((sum, shift) => {
+      const shifts = perf.getEntriesByType('layout-shift') as Array<{ value?: number; hadRecentInput?: boolean }>;
+      const cls = shifts.reduce((sum: number, shift: { value?: number; hadRecentInput?: boolean }) => {
         if (shift.hadRecentInput) return sum;
         return sum + (shift.value || 0);
       }, 0);
@@ -639,26 +641,27 @@ export async function browserScreenshot(
   }
 
   const format = opts.format ?? 'png';
-  const quality = format === 'png' ? undefined : opts.quality;
+  const screenshotType = (format === 'webp' ? 'png' : format) as 'png' | 'jpeg';
+  const quality = screenshotType === 'png' ? undefined : opts.quality;
 
   let buffer: Buffer;
   if (opts.ref) {
     const locator = resolveRef(opts.ref);
     if (!locator) return err(`Ref/uid ${opts.ref} not found. Run take_snapshot first.`);
     buffer = await locator.screenshot({
-      type: format,
+      type: screenshotType,
       quality,
       timeout: 15_000,
     });
   } else {
     buffer = await page.screenshot({
-      type: format,
+      type: screenshotType,
       quality,
       fullPage: opts.fullPage,
     });
   }
 
-  const ext = format === 'jpeg' ? 'jpg' : format;
+  const ext = screenshotType === 'jpeg' ? 'jpg' : screenshotType;
   const requestedName = opts.filePath
     ? opts.filePath.replace(/^.*[\\/]/, '')
     : `browser-screenshot-${Date.now()}.${ext}`;
@@ -694,7 +697,7 @@ export async function browserClick(uid: string, opts: { dblClick?: boolean; incl
   try {
     const locator = resolveUid(uid);
     await waitForEventsAfterAction(page, async () => {
-      await locator.click({ count: opts.dblClick ? 2 : 1, timeout: 10_000 });
+      await locator.click({ clickCount: opts.dblClick ? 2 : 1, timeout: 10_000 });
     });
     clearRefs();
     const suffix = await appendSnapshotIfNeeded(opts.includeSnapshot);
@@ -994,8 +997,20 @@ export async function browserWaitForText(text: string, timeout?: number): Promis
   const page = await getSelectedPage();
   if (!page) return err('Browser not running');
 
+  const effectiveTimeout = normalizeTimeout(timeout) ?? 15_000;
+
   try {
-    await page.getByText(text).first().waitFor({ timeout: normalizeTimeout(timeout) ?? 15_000 });
+    // Search all frames (main page + iframes) for the text
+    const frames = page.frames();
+    const locators = frames.flatMap(frame => [
+      frame.getByText(text).first(),
+      frame.locator(`text=${text}`).first(),
+    ]);
+
+    // Race all locators - first one to find the text wins
+    await Promise.any(
+      locators.map(loc => loc.waitFor({ timeout: effectiveTimeout }))
+    );
     const suffix = await appendSnapshotIfNeeded(true);
     return ok(`Element with text "${text}" found.${suffix}`);
   } catch (e) {
@@ -1156,6 +1171,7 @@ export async function browserNavigatePage(opts: {
   };
 
   let scriptIdentifier: string | undefined;
+  let usedAddInitScript = false;
   if (opts.initScript) {
     try {
       const session = await getCdpSession();
@@ -1164,7 +1180,10 @@ export async function browserNavigatePage(opts: {
       });
       scriptIdentifier = result?.identifier;
     } catch {
+      // Fallback: addInitScript persists for the page lifetime and cannot be removed.
+      // This is a known limitation - the script will run on every subsequent navigation.
       await page.addInitScript(opts.initScript);
+      usedAddInitScript = true;
     }
   }
 
@@ -1194,13 +1213,13 @@ export async function browserNavigatePage(opts: {
         break;
 
       case 'back': {
-        const res = await page.goBack({ timeout });
+        const res = await page.goBack({ timeout, waitUntil: 'domcontentloaded' });
         if (!res) return err('Cannot navigate back: no history entry.');
         break;
       }
 
       case 'forward': {
-        const res = await page.goForward({ timeout });
+        const res = await page.goForward({ timeout, waitUntil: 'domcontentloaded' });
         if (!res) return err('Cannot navigate forward: no history entry.');
         break;
       }
@@ -1220,7 +1239,8 @@ export async function browserNavigatePage(opts: {
     }
 
     clearRefs();
-    return ok(`Navigation complete (${type}). Current URL: ${page.url()}`);
+    const initScriptWarning = usedAddInitScript ? '\nNote: initScript was added via fallback and will persist on this page.' : '';
+    return ok(`Navigation complete (${type}). Current URL: ${page.url()}${initScriptWarning}`);
   } catch (e) {
     return err(`Navigation failed: ${errorMessage(e)}`);
   } finally {
@@ -1309,8 +1329,11 @@ export async function browserEvaluateScript(
     }
 
     fnHandle = await page.evaluateHandle(`(${functionDeclaration})`);
-    const result = await page.evaluate(
-      async (fn, ...els) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const evalFn = page.evaluate as any;
+    const result = await evalFn.call(
+      page,
+      async (fn: unknown, ...els: unknown[]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const callable = fn as any;
         return await callable(...els);
@@ -1589,8 +1612,8 @@ export async function browserEmulate(opts: {
 
     if (opts.userAgent !== undefined) {
       if (opts.userAgent === null) {
-        const defaultUserAgent = await page.evaluate(() => navigator.userAgent);
-        await client.send('Emulation.setUserAgentOverride', { userAgent: defaultUserAgent });
+        // Clear the override entirely by setting empty string, which restores browser default
+        await client.send('Emulation.setUserAgentOverride', { userAgent: '' });
         summary.push('User agent reset to browser default');
         updateEmulationState({ userAgent: undefined });
       } else {
