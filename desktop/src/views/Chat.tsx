@@ -12,7 +12,14 @@ import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Square, Plus, ChevronDown, ChevronRight, Check, X, Sparkles } from 'lucide-react';
+import {
+  Square, Plus, ChevronDown, ChevronRight, Sparkles,
+  FileText, FilePlus, Pencil, FolderSearch, FileSearch, Terminal,
+  Globe, Search, Bot, MessageCircle, ListChecks, FileCode,
+  MessageSquare, Camera, Monitor, Clock, Wrench, ArrowUp,
+  Smile, Image,
+  type LucideIcon,
+} from 'lucide-react';
 
 type Props = {
   gateway: ReturnType<typeof useGateway>;
@@ -46,6 +53,16 @@ function toolText(name: string, state: 'pending' | 'done'): string {
   return t ? t[state] : (state === 'pending' ? `Running ${name}` : `Ran ${name}`);
 }
 
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  Read: FileText, Write: FilePlus, Edit: Pencil,
+  Glob: FolderSearch, Grep: FileSearch, Bash: Terminal,
+  WebFetch: Globe, WebSearch: Search, Task: Bot,
+  AskUserQuestion: MessageCircle, TodoWrite: ListChecks, NotebookEdit: FileCode,
+  message: MessageSquare, screenshot: Camera, browser: Monitor,
+  schedule_reminder: Clock, schedule_recurring: Clock,
+  schedule_cron: Clock, list_reminders: Clock, cancel_reminder: Clock,
+};
+
 function ToolUseItem({ item }: { item: Extract<ChatItem, { type: 'tool_use' }> }) {
   const [open, setOpen] = useState(false);
   const hasOutput = item.output != null;
@@ -56,15 +73,12 @@ function ToolUseItem({ item }: { item: Extract<ChatItem, { type: 'tool_use' }> }
     <Collapsible open={open} onOpenChange={setOpen}>
       <Card className="my-1 overflow-hidden border-border/50 max-w-md">
         <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-secondary/50 transition-colors">
-          {item.streaming ? (
-            <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          ) : hasOutput ? (
-            item.is_error
-              ? <X className="w-3 h-3 text-destructive" />
-              : <Check className="w-3 h-3 text-success" />
-          ) : (
-            <div className="w-3 h-3 rounded-full border border-muted-foreground" />
-          )}
+          {(() => {
+            const Icon = TOOL_ICONS[item.name] || Wrench;
+            if (item.streaming) return <Icon className="w-3 h-3 text-muted-foreground animate-pulse" />;
+            if (hasOutput) return <Icon className={item.is_error ? 'w-3 h-3 text-destructive' : 'w-3 h-3 text-foreground'} />;
+            return <Icon className="w-3 h-3 text-muted-foreground" />;
+          })()}
           <span className="text-warning font-semibold">{displayName}</span>
           <span className="text-muted-foreground flex-1 truncate text-left">
             {(() => {
@@ -229,28 +243,48 @@ function AskUserQuestionPanel({
   );
 }
 
-const ONBOARD_PROMPT = `help me personalize you`;
+const SUGGESTIONS: { icon: LucideIcon; label: string; prompt: string }[] = [
+  { icon: Sparkles, label: 'personalize dorabot', prompt: 'help me personalize you' },
+  { icon: Globe, label: 'browse the web', prompt: 'open https://news.ycombinator.com and summarize the top stories' },
+  { icon: Image, label: 'generate an image', prompt: 'generate a cool image for me' },
+  { icon: Smile, label: 'make a meme', prompt: 'make me a funny meme' },
+  { icon: Clock, label: 'set a reminder', prompt: 'remind me in 30 minutes to take a break' },
+  { icon: Camera, label: 'take a screenshot', prompt: 'take a screenshot of my screen' },
+];
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'good morning';
+  if (h < 17) return 'good afternoon';
+  return 'good evening';
+}
 
 export function ChatView({ gateway }: Props) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const landingInputRef = useRef<HTMLTextAreaElement>(null);
   const isRunning = gateway.agentStatus !== 'idle';
+  const isEmpty = gateway.chatItems.length === 0;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [gateway.chatItems]);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (isEmpty) {
+      landingInputRef.current?.focus();
+    } else {
+      inputRef.current?.focus();
+    }
+  }, [isEmpty]);
 
-  const handleSend = async () => {
-    const prompt = input.trim();
+  const handleSend = async (overridePrompt?: string) => {
+    const prompt = overridePrompt || input.trim();
     if (!prompt || sending || gateway.pendingQuestion) return;
 
-    setInput('');
+    if (!overridePrompt) setInput('');
     setSending(true);
     try {
       await gateway.sendMessage(prompt);
@@ -311,6 +345,97 @@ export function ChatView({ gateway }: Props) {
     }
   };
 
+  const connected = gateway.connectionState === 'connected';
+
+  // landing page — centered input with suggestions
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col h-full min-h-0 min-w-0">
+        {/* header */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0 min-w-0">
+          <span className="text-muted-foreground text-[11px] font-mono">new task</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+            onClick={gateway.newSession}
+            title="new task"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center min-h-0 min-w-0">
+          <AuroraBackground className="w-full h-full">
+            <div className="w-full max-w-2xl px-6 space-y-6">
+              {/* greeting */}
+              <div className="text-center space-y-2">
+                <img src="/dorabot-computer.png" alt="dorabot" className="w-24 h-24 mx-auto dorabot-alive" />
+                <h1 className="text-lg font-semibold text-foreground">{getGreeting()}</h1>
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+                  <div className={cn('w-1.5 h-1.5 rounded-full', connected ? 'bg-success' : 'bg-destructive')} />
+                  {connected ? 'ready' : 'connecting...'}
+                </div>
+              </div>
+
+              {/* centered input */}
+              <Card className="rounded-2xl">
+                <Textarea
+                  ref={landingInputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={connected ? 'what can i help with?' : 'waiting for gateway...'}
+                  disabled={!connected}
+                  className="w-full min-h-[80px] max-h-[200px] resize-none text-sm border-0 rounded-2xl bg-transparent shadow-none focus-visible:ring-0"
+                  rows={2}
+                />
+                <div className="flex items-center px-3 pb-3">
+                  <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={!connected}>
+                    <SelectTrigger size="sm" className="h-7 w-20 text-[11px] rounded-lg shadow-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" align="start">
+                      <SelectItem value="claude-opus-4-6" className="text-xs">opus</SelectItem>
+                      <SelectItem value="claude-sonnet-4-5-20250929" className="text-xs">sonnet</SelectItem>
+                      <SelectItem value="claude-haiku-4-5-20251001" className="text-xs">haiku</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="flex-1" />
+                  <Button
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-lg"
+                    onClick={() => { handleSend(); }}
+                    disabled={!input.trim() || sending || !connected}
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </Button>
+                </div>
+              </Card>
+
+              {/* suggestions */}
+              {connected && (
+                <div className="grid grid-cols-3 gap-2">
+                  {SUGGESTIONS.map(s => (
+                    <button
+                      key={s.label}
+                      onClick={() => handleSend(s.prompt)}
+                      className="group flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/50 hover:bg-card hover:border-primary/30 hover:shadow-sm transition-all text-left"
+                    >
+                      <s.icon className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                      <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </AuroraBackground>
+        </div>
+      </div>
+    );
+  }
+
+  // conversation view — messages + bottom input
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0">
       {/* header */}
@@ -332,29 +457,6 @@ export function ChatView({ gateway }: Props) {
       {/* messages */}
       <ScrollArea className="flex-1 min-h-0 min-w-0">
         <div className="px-4 py-3 min-w-0 overflow-hidden">
-          {gateway.chatItems.length === 0 && (
-            <AuroraBackground className="h-full min-h-[300px]">
-              <div className="text-center space-y-3">
-                <img src="/dorabot-computer.png" alt="dorabot" className="w-40 h-40 mx-auto dorabot-alive" />
-                <div className="text-muted-foreground text-sm">send a message to start</div>
-                <div className="text-[10px] text-muted-foreground">
-                  {gateway.connectionState === 'connected' ? 'connected to gateway' : 'waiting for gateway...'}
-                </div>
-                {gateway.connectionState === 'connected' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs px-4 gap-1.5 mt-2"
-                    onClick={() => gateway.sendMessage(ONBOARD_PROMPT)}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    make it yours
-                  </Button>
-                )}
-              </div>
-            </AuroraBackground>
-          )}
-
           {gateway.chatItems.map((item, i) => renderItem(item, i))}
           <div ref={messagesEndRef} />
         </div>
@@ -387,51 +489,51 @@ export function ChatView({ gateway }: Props) {
       )}
 
       {/* input area */}
-      <div className="px-4 py-3 border-t border-border shrink-0 min-w-0">
-        <div className="flex gap-2 items-end min-w-0">
+      <div className="px-4 py-3 shrink-0 min-w-0">
+        <Card className="rounded-2xl">
           <Textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={gateway.connectionState === 'connected' ? 'type a message...' : 'waiting for gateway...'}
-            disabled={gateway.connectionState !== 'connected' || !!gateway.pendingQuestion}
-            className="flex-1 min-w-0 min-h-[40px] max-h-[200px] resize-none text-[13px]"
-            rows={1}
+            placeholder={connected ? 'type a message...' : 'waiting for gateway...'}
+            disabled={!connected || !!gateway.pendingQuestion}
+            className="w-full min-h-[64px] max-h-[200px] resize-none text-[13px] border-0 rounded-2xl bg-transparent shadow-none focus-visible:ring-0"
+            rows={2}
           />
-          <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={gateway.connectionState !== 'connected'}>
-            <SelectTrigger className="h-9 w-[72px] text-[10px] shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="claude-opus-4-6" className="text-[11px]">opus</SelectItem>
-              <SelectItem value="claude-sonnet-4-5-20250929" className="text-[11px]">sonnet</SelectItem>
-              <SelectItem value="claude-haiku-4-5-20251001" className="text-[11px]">haiku</SelectItem>
-            </SelectContent>
-          </Select>
-          {isRunning ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-3 text-destructive hover:bg-destructive/10"
-              onClick={gateway.abortAgent}
-            >
-              <Square className="w-3.5 h-3.5 mr-1" />
-              stop
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-3 text-muted-foreground hover:text-primary"
-              onClick={handleSend}
-              disabled={!input.trim() || sending || gateway.connectionState !== 'connected'}
-            >
-              <Send className="w-3.5 h-3.5 mr-1" />
-              send
-            </Button>
-          )}
-        </div>
+          <div className="flex items-center px-3 pb-3">
+            <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={!connected}>
+              <SelectTrigger size="sm" className="h-7 w-20 text-[11px] rounded-lg shadow-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                <SelectItem value="claude-opus-4-6" className="text-xs">opus</SelectItem>
+                <SelectItem value="claude-sonnet-4-5-20250929" className="text-xs">sonnet</SelectItem>
+                <SelectItem value="claude-haiku-4-5-20251001" className="text-xs">haiku</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="flex-1" />
+            {isRunning ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 w-8 p-0 rounded-lg"
+                onClick={gateway.abortAgent}
+              >
+                <Square className="w-3.5 h-3.5" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="h-8 w-8 p-0 rounded-lg"
+                onClick={() => { handleSend(); }}
+                disabled={!input.trim() || sending || !connected}
+              >
+                <ArrowUp className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </Card>
       </div>
     </div>
   );
