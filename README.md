@@ -17,8 +17,7 @@ Your personal AI agent that lives on WhatsApp, Telegram, and a desktop app. It c
 - **Extend with skills** — Drop a markdown file in a folder and the agent picks up new capabilities automatically.
 
 
-https://github.com/user-attachments/assets/2a734272-b1e6-4978-9d00-cc051daf7401
-
+https://github.com/user-attachments/assets/d675347a-46c0-4767-b35a-e7a1db6386f9
 
 
 
