@@ -14,6 +14,7 @@ type Props = {
   channel: 'whatsapp' | 'telegram';
   gateway: ReturnType<typeof useGateway>;
   onViewSession?: (sessionId: string, channel?: string, chatId?: string) => void;
+  onSwitchChannel?: (channel: 'whatsapp' | 'telegram') => void;
 };
 
 function WhatsAppSetup({ gateway }: { gateway: ReturnType<typeof useGateway> }) {
@@ -135,7 +136,7 @@ function WhatsAppSetup({ gateway }: { gateway: ReturnType<typeof useGateway> }) 
   );
 }
 
-export function ChannelView({ channel, gateway, onViewSession }: Props) {
+export function ChannelView({ channel, gateway, onViewSession, onSwitchChannel }: Props) {
   const status = gateway.channelStatuses.find(s => s.channel === channel);
   const messages = useMemo(
     () => gateway.channelMessages.filter(m => m.channel === channel),
@@ -173,7 +174,25 @@ export function ChannelView({ channel, gateway, onViewSession }: Props) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
-        <span className="font-semibold text-sm">{label}</span>
+        {onSwitchChannel ? (
+          <div className="flex items-center gap-1">
+            {(['whatsapp', 'telegram'] as const).map(ch => (
+              <button
+                key={ch}
+                onClick={() => onSwitchChannel(ch)}
+                className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                  channel === ch
+                    ? 'bg-secondary text-foreground font-semibold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
+                {ch === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="font-semibold text-sm">{label}</span>
+        )}
         {statusBadge()}
         {status?.accountId && (
           <span className="text-muted-foreground text-[11px]">{status.accountId}</span>

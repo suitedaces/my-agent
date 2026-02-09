@@ -1,5 +1,8 @@
 import { useCallback, useState, useEffect } from 'react';
 import type { useGateway } from '../hooks/useGateway';
+import { ToolsView } from './Tools';
+import { StatusView } from './Status';
+import { useTheme } from '../hooks/useTheme';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,13 +10,15 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Shield, Brain, Globe, Settings2, Box, Lock, FolderLock, X, Plus } from 'lucide-react';
+import { Shield, Brain, Globe, Settings2, Box, Lock, FolderLock, X, Plus, Wrench, Activity, Sun } from 'lucide-react';
 
 type Props = {
   gateway: ReturnType<typeof useGateway>;
 };
 
 export function SettingsView({ gateway }: Props) {
+  const [settingsTab, setSettingsTab] = useState<'config' | 'tools' | 'status'>('config');
+  const { theme, setTheme } = useTheme();
   const cfg = gateway.configData as Record<string, any> | null;
   const disabled = gateway.connectionState !== 'connected' || !cfg;
 
@@ -39,14 +44,48 @@ export function SettingsView({ gateway }: Props) {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
-        <Settings2 className="w-4 h-4 text-primary" />
-        <span className="font-semibold text-sm">Settings</span>
-        {disabled && <Badge variant="destructive" className="text-[9px] h-4">disconnected</Badge>}
+      {/* tab bar */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-border shrink-0">
+        {([
+          { id: 'config' as const, label: 'Configuration', icon: Settings2 },
+          { id: 'tools' as const, label: 'Tools', icon: Wrench },
+          { id: 'status' as const, label: 'Status', icon: Activity },
+        ]).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setSettingsTab(tab.id)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] transition-colors ${
+              settingsTab === tab.id
+                ? 'bg-secondary text-foreground font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+            }`}
+          >
+            <tab.icon className="w-3 h-3" />
+            {tab.label}
+          </button>
+        ))}
+        {disabled && <Badge variant="destructive" className="text-[9px] h-4 ml-auto">disconnected</Badge>}
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
+      {settingsTab === 'config' && <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-4 max-w-lg">
+
+          {/* appearance */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Sun className="w-4 h-4 text-primary" />
+                <span className="text-xs font-semibold">Appearance</span>
+              </div>
+              <SettingRow label="dark mode" description="switch between light and dark theme">
+                <Switch
+                  size="sm"
+                  checked={theme === 'dark'}
+                  onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                />
+              </SettingRow>
+            </CardContent>
+          </Card>
 
           {/* permissions */}
           <Card>
@@ -229,7 +268,19 @@ export function SettingsView({ gateway }: Props) {
             changes are saved to config and take effect on next agent run
           </div>
         </div>
-      </ScrollArea>
+      </ScrollArea>}
+
+      {settingsTab === 'tools' && (
+        <div className="flex-1 min-h-0">
+          <ToolsView gateway={gateway} />
+        </div>
+      )}
+
+      {settingsTab === 'status' && (
+        <div className="flex-1 min-h-0">
+          <StatusView gateway={gateway} />
+        </div>
+      )}
     </div>
   );
 }

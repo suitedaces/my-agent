@@ -1,41 +1,30 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useGateway } from './hooks/useGateway';
 import { ChatView } from './views/Chat';
 import { ChannelView } from './views/Channel';
 import { Automations } from './components/Automations';
-import { ToolsView } from './views/Tools';
 import { FileExplorer } from './components/FileExplorer';
 import { FileViewer } from './components/FileViewer';
-import { StatusView } from './views/Status';
 import { SettingsView } from './views/Settings';
 import { SoulView } from './views/Soul';
 import { Toaster, toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { FlipWords } from '@/components/aceternity/flip-words';
 import {
-  MessageSquare, Phone, Send, Zap, Wrench, Activity, Settings2,
-  FolderOpen, Plus, ChevronRight, Sparkles, Sun, Moon
+  MessageSquare, Radio, Zap, Brain, Settings2,
+  FolderOpen
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-import { useTheme } from './hooks/useTheme';
 
-type NavTab = 'chat' | 'whatsapp' | 'telegram' | 'automation' | 'tools' | 'soul' | 'status' | 'settings';
+type NavTab = 'chat' | 'channels' | 'automation' | 'memory' | 'settings';
 type SessionFilter = 'all' | 'desktop' | 'telegram' | 'whatsapp';
 
 const NAV_ITEMS: { id: NavTab; label: string; icon: React.ReactNode }[] = [
   { id: 'chat', label: 'Chat', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-  { id: 'whatsapp', label: 'WhatsApp', icon: <Phone className="w-3.5 h-3.5" /> },
-  { id: 'telegram', label: 'Telegram', icon: <Send className="w-3.5 h-3.5" /> },
+  { id: 'channels', label: 'Channels', icon: <Radio className="w-3.5 h-3.5" /> },
   { id: 'automation', label: 'Automations', icon: <Zap className="w-3.5 h-3.5" /> },
-  { id: 'tools', label: 'Tools', icon: <Wrench className="w-3.5 h-3.5" /> },
-  { id: 'soul', label: 'Soul', icon: <Sparkles className="w-3.5 h-3.5" /> },
-  { id: 'status', label: 'Status', icon: <Activity className="w-3.5 h-3.5" /> },
+  { id: 'memory', label: 'Memory', icon: <Brain className="w-3.5 h-3.5" /> },
   { id: 'settings', label: 'Settings', icon: <Settings2 className="w-3.5 h-3.5" /> },
 ];
 
@@ -44,10 +33,9 @@ export default function App() {
   const [showFiles, setShowFiles] = useState(true);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
+  const [selectedChannel, setSelectedChannel] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const gw = useGateway();
-  const { theme, toggle: toggleTheme } = useTheme();
 
-  // show tool notifications as toasts
   const prevNotifCount = useRef(0);
   useEffect(() => {
     if (gw.notifications.length > prevNotifCount.current) {
@@ -81,18 +69,12 @@ export default function App() {
     switch (activeTab) {
       case 'chat':
         return <ChatView gateway={gw} />;
-      case 'whatsapp':
-        return <ChannelView channel="whatsapp" gateway={gw} onViewSession={handleViewSession} />;
-      case 'telegram':
-        return <ChannelView channel="telegram" gateway={gw} onViewSession={handleViewSession} />;
+      case 'channels':
+        return <ChannelView channel={selectedChannel} gateway={gw} onViewSession={handleViewSession} onSwitchChannel={setSelectedChannel} />;
       case 'automation':
         return <Automations gateway={gw} />;
-      case 'tools':
-        return <ToolsView gateway={gw} />;
-      case 'soul':
+      case 'memory':
         return <SoulView gateway={gw} onSetupChat={(prompt) => { gw.sendMessage(prompt); setActiveTab('chat'); }} />;
-      case 'status':
-        return <StatusView gateway={gw} />;
       case 'settings':
         return <SettingsView gateway={gw} />;
     }
@@ -110,10 +92,6 @@ export default function App() {
     ? 'bg-warning'
     : 'bg-destructive';
 
-  const statusWords = gw.connectionState === 'connected'
-    ? [gw.agentStatus]
-    : [gw.connectionState];
-
   return (
     <TooltipProvider delayDuration={300}>
       <Toaster
@@ -124,42 +102,15 @@ export default function App() {
         }}
       />
 
-      {/* titlebar */}
-      <div className="h-9 bg-card border-b border-border flex items-center px-4 pr-20 shrink-0" style={{ WebkitAppRegion: 'drag' } as any}>
+      {/* titlebar — pure drag chrome */}
+      <div className="h-9 bg-card border-b border-border flex items-center pl-[78px] pr-4 shrink-0" style={{ WebkitAppRegion: 'drag' } as any}>
         <span className="text-xs text-muted-foreground font-medium">dorabot</span>
-
-        <div style={{ WebkitAppRegion: 'no-drag' } as any} className="ml-3">
-          <Select value={gw.model} onValueChange={gw.changeModel} disabled={gw.connectionState !== 'connected'}>
-            <SelectTrigger className="h-6 w-24 text-[11px] bg-background border-border">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="claude-opus-4-6" className="text-[11px]">opus</SelectItem>
-              <SelectItem value="claude-sonnet-4-5-20250929" className="text-[11px]">sonnet</SelectItem>
-              <SelectItem value="claude-haiku-4-5-20251001" className="text-[11px]">haiku</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="ml-auto flex items-center gap-3 text-[11px]" style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <button onClick={toggleTheme} className="text-muted-foreground hover:text-foreground transition-colors">
-            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-          </button>
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${statusDotColor}`} />
-            {statusWords.length > 1 ? (
-              <FlipWords words={statusWords} duration={2000} className="text-muted-foreground" />
-            ) : (
-              <span className="text-muted-foreground">{statusWords[0]}</span>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* main layout */}
-      <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0">
+      <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
         {/* sidebar */}
-        <ResizablePanel defaultSize="15" minSize="10" maxSize="25" className="bg-card overflow-hidden">
+        <ResizablePanel defaultSize={15} minSize={10} maxSize={25} className="bg-card overflow-hidden">
           <div className="flex flex-col h-full min-h-0">
             <div className="shrink-0 p-2">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2.5 pt-3 pb-1">views</div>
@@ -242,9 +193,17 @@ export default function App() {
               </>
             )}
 
+            {/* status at sidebar bottom */}
             <Separator className="shrink-0" />
-            <div className="shrink-0 px-3 py-2 text-[10px] text-muted-foreground">
-              {gw.currentSessionId ? `session: ${gw.currentSessionId.slice(0, 8)}` : 'no session'}
+            <div className="shrink-0 px-3 py-2 space-y-1">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusDotColor}`} />
+                <span className="text-[10px] text-muted-foreground">{gw.connectionState}</span>
+                <span className="text-[10px] text-muted-foreground ml-auto">{gw.agentStatus}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {gw.currentSessionId ? `session: ${gw.currentSessionId.slice(0, 8)}` : 'no session'}
+              </div>
             </div>
           </div>
         </ResizablePanel>
@@ -252,7 +211,7 @@ export default function App() {
         <ResizableHandle withHandle />
 
         {/* main content */}
-        <ResizablePanel defaultSize={showFiles ? "55" : "85"} minSize="30" className="overflow-hidden">
+        <ResizablePanel defaultSize={showFiles ? 55 : 85} minSize={30} className="overflow-hidden">
           <div className="flex flex-col h-full min-h-0">
             {renderView()}
           </div>
@@ -262,7 +221,7 @@ export default function App() {
         {showFiles && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize="30" minSize="15" maxSize="45" className="overflow-hidden">
+            <ResizablePanel defaultSize={30} minSize={15} maxSize={45} className="overflow-hidden">
               <FileExplorer
                 rpc={gw.rpc}
                 connected={gw.connectionState === 'connected'}

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Send, Square, Plus, ChevronDown, ChevronRight, Check, X, Sparkles } from 'lucide-react';
 
 type Props = {
@@ -314,18 +315,17 @@ export function ChatView({ gateway }: Props) {
     <div className="flex flex-col h-full min-h-0">
       {/* header */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
-        <span className="font-semibold text-sm">Chat</span>
-        <span className="text-muted-foreground text-[11px]">
-          {gateway.currentSessionId ? `session: ${gateway.currentSessionId.slice(0, 8)}` : 'new session'}
+        <span className="text-muted-foreground text-[11px] font-mono">
+          {gateway.currentSessionId ? gateway.currentSessionId.slice(0, 8) : 'new conversation'}
         </span>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="ml-auto h-6 text-[11px] px-2"
+          className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
           onClick={gateway.newSession}
+          title="new session"
         >
-          <Plus className="w-3 h-3 mr-1" />
-          new
+          <Plus className="w-3.5 h-3.5" />
         </Button>
       </div>
 
@@ -399,6 +399,16 @@ export function ChatView({ gateway }: Props) {
             className="flex-1 min-h-[40px] max-h-[200px] resize-none text-[13px]"
             rows={1}
           />
+          <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={gateway.connectionState !== 'connected'}>
+            <SelectTrigger className="h-9 w-[72px] text-[10px] shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="claude-opus-4-6" className="text-[11px]">opus</SelectItem>
+              <SelectItem value="claude-sonnet-4-5-20250929" className="text-[11px]">sonnet</SelectItem>
+              <SelectItem value="claude-haiku-4-5-20251001" className="text-[11px]">haiku</SelectItem>
+            </SelectContent>
+          </Select>
           {isRunning ? (
             <Button
               variant="ghost"
