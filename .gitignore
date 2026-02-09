@@ -33,3 +33,6 @@ npm-debug.log*
 *.swp
 
 .claude
+
+# scratch/ideas
+ideas/
