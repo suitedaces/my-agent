@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs';
-import { createWaSocket, getDefaultAuthDir, DisconnectReason, getDisconnectReason, type WASocket } from './session.js';
+import { createWaSocket, getDefaultAuthDir, DisconnectReason, getDisconnectReason, isAuthenticated, type WASocket } from './session.js';
 import { sendWhatsAppMessage, editWhatsAppMessage, deleteWhatsAppMessage, toWhatsAppJid } from './send.js';
 import { registerChannelHandler } from '../../tools/messaging.js';
 import type { InboundMessage } from '../types.js';
@@ -60,14 +60,19 @@ export async function startWhatsAppMonitor(opts: WhatsAppMonitorOptions): Promis
   async function connect(): Promise<void> {
     if (stopped) return;
 
+    if (!isAuthenticated(authDir)) {
+      console.error('[whatsapp] no credentials found, use whatsapp:login to link');
+      return;
+    }
+
     try {
       sock = await createWaSocket({
         authDir,
         onConnection: (state, err) => {
           if (state === 'close' && !stopped) {
             const code = getDisconnectReason(err);
-            if (code === DisconnectReason.loggedOut) {
-              console.error('[whatsapp] logged out, needs re-login');
+            if (code === DisconnectReason.loggedOut || code === 405) {
+              console.error('[whatsapp] logged out (code ' + code + '), needs re-login');
               return;
             }
             console.log(`[whatsapp] disconnected (${code}), reconnecting in 5s...`);
