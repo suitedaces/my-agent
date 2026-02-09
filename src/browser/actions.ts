@@ -1,4 +1,4 @@
-import type { ConsoleMessage, Dialog, Page, Request, Response } from 'playwright-core';
+import type { ConsoleMessage, Dialog, Locator, Page, Request, Response } from 'playwright-core';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -780,32 +780,63 @@ export async function browserType(
 }
 
 // fill (clear + type)
+/**
+ * For combobox/select elements, resolve the display text to the actual option value
+ * by querying the DOM. The snapshot shows display text but selectOption needs the
+ * real HTML value attribute.
+ */
+async function resolveSelectValue(locator: Locator, displayText: string): Promise<string> {
+  try {
+    const realValue = await locator.evaluate((el: any, text: any) => {
+      if (el.tagName !== 'SELECT') return null;
+      const options = el.options;
+      for (let i = 0; i < options.length; i++) {
+        const opt = options[i];
+        if (opt.textContent?.trim() === text) return opt.value;
+        if (opt.label?.trim() === text) return opt.value;
+      }
+      return null;
+    }, displayText);
+    return realValue ?? displayText;
+  } catch {
+    return displayText;
+  }
+}
+
+async function fillElement(locator: Locator, value: string, isCombobox: boolean): Promise<void> {
+  if (isCombobox) {
+    // Resolve display text to real option value, then select
+    const realValue = await resolveSelectValue(locator, value);
+    try {
+      await locator.selectOption(realValue);
+    } catch {
+      // Fallback: try with original value, then fill
+      try {
+        await locator.selectOption(value);
+      } catch {
+        await locator.fill(value);
+      }
+    }
+  } else {
+    try {
+      await locator.fill(value);
+    } catch {
+      await locator.selectOption(value);
+    }
+  }
+}
+
 export async function browserFill(uid: string, value: string, includeSnapshot?: boolean): Promise<ActionResult> {
   const page = getPage();
   if (!page) return err('Browser not running');
 
   try {
     const locator = resolveUid(uid);
-
-    // Check if this is a combobox/select via the a11y node (like Chrome DevTools MCP does)
     const refEntry = getRefEntry(uid);
     const isCombobox = refEntry?.role === 'combobox';
 
     await waitForEventsAfterAction(page, async () => {
-      if (isCombobox) {
-        // For comboboxes, try selectOption first (more reliable for <select> elements)
-        try {
-          await locator.selectOption(value);
-        } catch {
-          await locator.fill(value);
-        }
-      } else {
-        try {
-          await locator.fill(value);
-        } catch {
-          await locator.selectOption(value);
-        }
-      }
+      await fillElement(locator, value, !!isCombobox);
     });
 
     const suffix = await appendSnapshotIfNeeded(includeSnapshot);
@@ -833,19 +864,7 @@ export async function browserFillForm(
       const isCombobox = refEntry?.role === 'combobox';
 
       await waitForEventsAfterAction(page, async () => {
-        if (isCombobox) {
-          try {
-            await locator.selectOption(element.value);
-          } catch {
-            await locator.fill(element.value);
-          }
-        } else {
-          try {
-            await locator.fill(element.value);
-          } catch {
-            await locator.selectOption(element.value);
-          }
-        }
+        await fillElement(locator, element.value, !!isCombobox);
       });
       results.push(`${element.uid}: filled`);
     } catch (e) {
