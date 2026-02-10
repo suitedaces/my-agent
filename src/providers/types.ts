@@ -31,6 +31,12 @@ export type ProviderAuthStatus = {
   method?: 'api_key' | 'oauth';
   identity?: string;
   error?: string;
+  /** Model currently configured (e.g. "claude-opus-4-5-20251101") */
+  model?: string;
+  /** Claude Code CLI version (e.g. "2.0.76") */
+  cliVersion?: string;
+  /** Permission mode (e.g. "default", "bypassPermissions") */
+  permissionMode?: string;
 };
 
 export type ProviderQueryResult = {
