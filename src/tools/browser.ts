@@ -37,6 +37,7 @@ import {
   browserGetNetworkRequest,
   browserPdf,
   browserPromptLogin,
+  browserScroll,
 } from '../browser/actions.js';
 
 // browser config loaded at runtime, set by gateway/startup
@@ -86,6 +87,7 @@ const browserActions = [
   'get_network_request',
   'pdf',
   'prompt_login',
+  'scroll',
 ] as const;
 
 export const browserTool = tool(
@@ -149,6 +151,10 @@ export const browserTool = tool(
     format: z.enum(['png', 'jpeg', 'webp']).optional().describe('Screenshot format'),
     quality: z.number().min(0).max(100).optional().describe('Screenshot quality for jpeg/webp'),
     fullPage: z.boolean().optional().describe('Capture full-page screenshot'),
+
+    // Scroll
+    deltaX: z.number().optional().describe('Horizontal scroll pixels (positive=right). Default 0.'),
+    deltaY: z.number().optional().describe('Vertical scroll pixels (positive=down). Default 300. Use negative to scroll up.'),
 
     // Wait
     timeMs: z.number().optional().describe('Time to wait in ms (legacy wait action)'),
@@ -437,6 +443,15 @@ export const browserTool = tool(
 
         case 'prompt_login':
           result = await browserPromptLogin(browserConfig);
+          break;
+
+        case 'scroll':
+          result = await browserScroll({
+            uid,
+            deltaX: args.deltaX,
+            deltaY: args.deltaY,
+            includeSnapshot: args.includeSnapshot,
+          });
           break;
 
         default:

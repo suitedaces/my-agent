@@ -670,7 +670,13 @@ export async function browserScreenshot(
 
   const url = page.url();
   const title = await page.title().catch(() => '(unavailable)');
-  return ok(`Screenshot captured from: ${url} (${title})\nSaved screenshot path: ${out}`);
+  const base64 = buffer.toString('base64');
+  const mimeType = screenshotType === 'jpeg' ? 'image/jpeg' : 'image/png';
+  return {
+    text: `Screenshot captured from: ${url} (${title})\nSaved screenshot path: ${out}`,
+    image: base64,
+    mimeType,
+  };
 }
 
 // prompt_login — screenshot + ask user to log in manually
@@ -964,6 +970,46 @@ export async function browserHover(uid: string, includeSnapshot?: boolean): Prom
     return ok(`Hovered ${uid}${suffix}${formatContextSuffix(ctxState)}`);
   } catch (e) {
     return err(`Hover failed for ${uid}: ${errorMessage(e)}`);
+  }
+}
+
+// scroll
+export async function browserScroll(opts: {
+  uid?: string;
+  deltaX?: number;
+  deltaY?: number;
+  includeSnapshot?: boolean;
+} = {}): Promise<ActionResult> {
+  const page = getPage();
+  if (!page) return err('Browser not running');
+
+  const deltaX = opts.deltaX ?? 0;
+  const deltaY = opts.deltaY ?? 300; // default: scroll down one viewport-ish chunk
+
+  try {
+    if (opts.uid) {
+      // Scroll a specific element into view, then scroll within it
+      const locator = resolveUid(opts.uid);
+      await locator.scrollIntoViewIfNeeded({ timeout: 5_000 });
+      if (deltaX !== 0 || deltaY !== 0) {
+        await locator.evaluate((el: any, deltas: any) => {
+          el.scrollBy(deltas.x, deltas.y);
+        }, { x: deltaX, y: deltaY });
+      }
+    } else {
+      // Scroll the page using mouse wheel (works with lazy-loaded content)
+      await page.mouse.wheel(deltaX, deltaY);
+    }
+
+    // Small delay for lazy content to load
+    await page.waitForTimeout(300);
+
+    const suffix = await appendSnapshotIfNeeded(opts.includeSnapshot);
+    const direction = deltaY > 0 ? 'down' : deltaY < 0 ? 'up' : deltaX > 0 ? 'right' : 'left';
+    const target = opts.uid ? `element ${opts.uid}` : 'page';
+    return ok(`Scrolled ${target} ${direction} by (${deltaX}, ${deltaY})${suffix}`);
+  } catch (e) {
+    return err(`Scroll failed: ${errorMessage(e)}`);
   }
 }
 
