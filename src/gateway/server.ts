@@ -22,6 +22,8 @@ import { getDefaultAuthDir } from '../channels/whatsapp/session.js';
 import { getChannelHandler } from '../tools/messaging.js';
 import { setCronRunner } from '../tools/index.js';
 import { getProvider, getProviderByName, disposeAllProviders } from '../providers/index.js';
+import { isClaudeInstalled, hasOAuthTokens, getApiKey as getClaudeApiKey } from '../providers/claude.js';
+import { isCodexInstalled, hasCodexAuth } from '../providers/codex.js';
 import type { ProviderName } from '../config.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { classifyToolCall, cleanToolName, isToolAllowed, type Tier } from './tool-policy.js';
@@ -852,7 +854,26 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             }
           }
 
-          if (m.type === 'result') {
+          // Codex tool results come as type: 'result' with subtype: 'tool_result'
+          if (m.type === 'result' && m.subtype === 'tool_result') {
+            const toolUseId = m.tool_use_id as string;
+            const resultContent = Array.isArray(m.content)
+              ? (m.content as Array<Record<string, unknown>>).filter(c => c.type === 'text').map(c => c.text).join('\n')
+              : String(m.content || '');
+            broadcast({
+              event: 'agent.tool_result',
+              data: {
+                source,
+                sessionKey,
+                tool_use_id: toolUseId,
+                content: resultContent.slice(0, 2000),
+                is_error: m.is_error || false,
+                timestamp: Date.now(),
+              },
+            });
+          }
+
+          if (m.type === 'result' && m.subtype !== 'tool_result') {
             agentText = (m.result as string) || agentText;
             agentSessionId = (m.session_id as string) || agentSessionId;
             if (agentSessionId && session) {
@@ -1290,6 +1311,22 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         }
 
         // ── provider RPCs ─────────────────────────────────────────
+        case 'provider.detect': {
+          const [claudeInstalled, codexInstalled, claudeOAuth, codexAuth, apiKey] =
+            await Promise.all([
+              isClaudeInstalled(),
+              isCodexInstalled(),
+              Promise.resolve(hasOAuthTokens()),
+              Promise.resolve(hasCodexAuth()),
+              Promise.resolve(!!getClaudeApiKey()),
+            ]);
+
+          return { id, result: {
+            claude: { installed: claudeInstalled, hasOAuth: claudeOAuth, hasApiKey: apiKey },
+            codex: { installed: codexInstalled, hasAuth: codexAuth },
+          }};
+        }
+
         case 'provider.get': {
           try {
             const provider = await getProvider(config);
