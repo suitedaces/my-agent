@@ -219,6 +219,7 @@ export function useGateway(url = 'ws://localhost:18789') {
   const [whatsappQr, setWhatsappQr] = useState<string | null>(null);
   const [whatsappLoginStatus, setWhatsappLoginStatus] = useState<string>('unknown');
   const [whatsappLoginError, setWhatsappLoginError] = useState<string | null>(null);
+  const [providerInfo, setProviderInfo] = useState<{ name: string; auth: { authenticated: boolean; method?: string; identity?: string; error?: string } } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const rpcIdRef = useRef(0);
@@ -505,6 +506,12 @@ export function useGateway(url = 'ws://localhost:18789') {
         }
         break;
       }
+
+      case 'provider.auth_complete': {
+        const d = data as { provider: string; status: { authenticated: boolean; method?: string; identity?: string; error?: string } };
+        setProviderInfo(prev => prev ? { ...prev, auth: d.status } : { name: d.provider, auth: d.status });
+        break;
+      }
     }
   }, []);
 
@@ -535,6 +542,10 @@ export function useGateway(url = 'ws://localhost:18789') {
               const c = res as Record<string, unknown>;
               setConfigData(c);
               if (c.model) setModel(c.model as string);
+            }).catch(() => {});
+            rpc('provider.get').then((res) => {
+              const p = res as { name: string; auth: { authenticated: boolean; method?: string; identity?: string; error?: string } };
+              setProviderInfo(p);
             }).catch(() => {});
             rpc('sessions.list').then((res) => {
               const arr = res as SessionInfo[];
@@ -810,6 +821,44 @@ export function useGateway(url = 'ws://localhost:18789') {
     setWhatsappLoginError(null);
   }, [rpc]);
 
+  // provider helpers
+  const getProviderStatus = useCallback(async () => {
+    const res = await rpc('provider.get') as { name: string; auth: { authenticated: boolean; method?: string; identity?: string; error?: string } };
+    setProviderInfo(res);
+    return res;
+  }, [rpc]);
+
+  const setProvider = useCallback(async (name: string) => {
+    await rpc('provider.set', { name });
+    const res = await rpc('provider.get') as { name: string; auth: { authenticated: boolean; method?: string; identity?: string; error?: string } };
+    setProviderInfo(res);
+    return res;
+  }, [rpc]);
+
+  const authWithApiKey = useCallback(async (provider: string, apiKey: string) => {
+    const res = await rpc('provider.auth.apiKey', { provider, apiKey }) as { authenticated: boolean; method?: string; error?: string };
+    if (res.authenticated) {
+      setProviderInfo(prev => prev ? { ...prev, auth: res } : { name: provider, auth: res });
+    }
+    return res;
+  }, [rpc]);
+
+  const startOAuth = useCallback(async (provider: string) => {
+    return await rpc('provider.auth.oauth', { provider }) as { authUrl: string; loginId: string };
+  }, [rpc]);
+
+  const completeOAuth = useCallback(async (provider: string, loginId: string) => {
+    const res = await rpc('provider.auth.oauth.complete', { provider, loginId }) as { authenticated: boolean; method?: string; error?: string };
+    if (res.authenticated) {
+      setProviderInfo(prev => prev ? { ...prev, auth: res } : { name: provider, auth: res });
+    }
+    return res;
+  }, [rpc]);
+
+  const checkProvider = useCallback(async (provider: string) => {
+    return await rpc('provider.check', { provider }) as { ready: boolean; reason?: string };
+  }, [rpc]);
+
   const progress = useMemo<ProgressItem[]>(() => {
     for (let i = chatItems.length - 1; i >= 0; i--) {
       const item = chatItems[i];
@@ -864,5 +913,12 @@ export function useGateway(url = 'ws://localhost:18789') {
     whatsappCheckStatus,
     whatsappLogin,
     whatsappLogout,
+    providerInfo,
+    getProviderStatus,
+    setProvider,
+    authWithApiKey,
+    startOAuth,
+    completeOAuth,
+    checkProvider,
   };
 }

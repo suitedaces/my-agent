@@ -1,4 +1,4 @@
-import { contextBridge } from 'electron';
+import { contextBridge, shell } from 'electron';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -14,4 +14,5 @@ function readGatewayToken(): string | null {
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   getGatewayToken: readGatewayToken,
+  openExternal: (url: string) => shell.openExternal(url),
 });
