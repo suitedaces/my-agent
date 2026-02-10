@@ -58,8 +58,29 @@ export function ProviderCard({ gateway, disabled }: Props) {
     { value: 'claude-haiku-4-5-20251001', label: 'haiku' },
   ];
 
+  const codexModels = [
+    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+    { value: 'gpt-5.2-codex', label: 'gpt-5.2-codex' },
+    { value: 'gpt-5.1-codex-mini', label: 'gpt-5.1-codex-mini' },
+    { value: 'gpt-5.1-codex-max', label: 'gpt-5.1-codex-max' },
+    { value: 'gpt-5.2', label: 'gpt-5.2' },
+    { value: 'gpt-5.1', label: 'gpt-5.1' },
+    { value: 'gpt-5.1-codex', label: 'gpt-5.1-codex' },
+    { value: 'gpt-5-codex', label: 'gpt-5-codex' },
+    { value: 'gpt-5-codex-mini', label: 'gpt-5-codex-mini' },
+    { value: 'gpt-5', label: 'gpt-5' },
+  ];
+
   const currentModel = gateway.model || cfg?.model || 'claude-sonnet-4-5-20250929';
   const codexModel = cfg?.provider?.codex?.model || '';
+
+  const handleCodexModelChange = useCallback(async (value: string) => {
+    try {
+      await gateway.setConfig('provider.codex.model', value);
+    } catch (err) {
+      console.error('failed to set codex model:', err);
+    }
+  }, [gateway]);
 
   return (
     <Card>
@@ -147,10 +168,17 @@ export function ProviderCard({ gateway, disabled }: Props) {
               </Select>
             </SettingRow>
           ) : (
-            <SettingRow label="model" description="codex model (from ~/.codex/config.toml)">
-              <div className="text-[11px] text-muted-foreground font-mono">
-                {codexModel || 'default'}
-              </div>
+            <SettingRow label="model" description="codex model for agent runs">
+              <Select value={codexModel || 'gpt-5.3-codex'} onValueChange={handleCodexModelChange} disabled={disabled}>
+                <SelectTrigger className="h-7 w-44 text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {codexModels.map(m => (
+                    <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </SettingRow>
           )}
         </div>
