@@ -9,6 +9,7 @@ import { FileViewer } from './components/FileViewer';
 import { SettingsView } from './views/Settings';
 import { SoulView } from './views/Soul';
 import { SkillsView } from './views/Skills';
+import { OnboardingOverlay } from './components/Onboarding';
 import { Toaster, toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -37,7 +38,22 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
   const [selectedChannel, setSelectedChannel] = useState<'whatsapp' | 'telegram'>('whatsapp');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const onboardingCheckedRef = useRef(false);
   const gw = useGateway();
+
+  // Check provider auth on connect - show onboarding if not authenticated
+  useEffect(() => {
+    if (gw.connectionState === 'connected' && gw.providerInfo && !onboardingCheckedRef.current) {
+      onboardingCheckedRef.current = true;
+      if (!gw.providerInfo.auth.authenticated) {
+        setShowOnboarding(true);
+      }
+    }
+    if (gw.connectionState === 'disconnected') {
+      onboardingCheckedRef.current = false;
+    }
+  }, [gw.connectionState, gw.providerInfo]);
 
   const prevNotifCount = useRef(0);
   useEffect(() => {
@@ -106,6 +122,13 @@ export default function App() {
           style: { background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--foreground)' },
         }}
       />
+
+      {showOnboarding && (
+        <OnboardingOverlay
+          gateway={gw}
+          onComplete={() => setShowOnboarding(false)}
+        />
+      )}
 
       {/* titlebar — pure drag chrome */}
       <div className="h-11 bg-card glass border-b border-border flex items-center pl-[78px] pr-4 shrink-0" style={{ WebkitAppRegion: 'drag' } as any}>

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ProviderCard } from '@/components/ProviderCard';
 import { Shield, Brain, Globe, Settings2, Box, Lock, FolderLock, X, Plus, Wrench, Activity, Sun } from 'lucide-react';
 
 type Props = {
@@ -86,6 +87,9 @@ export function SettingsView({ gateway }: Props) {
               </SettingRow>
             </CardContent>
           </Card>
+
+          {/* ai provider */}
+          <ProviderCard gateway={gateway} disabled={disabled} />
 
           {/* permissions */}
           <Card>

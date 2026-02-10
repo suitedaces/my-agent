@@ -65,6 +65,38 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   schedule_cron: Clock, list_reminders: Clock, cancel_reminder: Clock,
 };
 
+const CLAUDE_MODELS = [
+  { value: 'claude-opus-4-6', label: 'opus' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'sonnet' },
+  { value: 'claude-haiku-4-5-20251001', label: 'haiku' },
+];
+
+function ModelSelector({ gateway, disabled }: { gateway: ReturnType<typeof useGateway>; disabled: boolean }) {
+  const providerName = (gateway.configData as any)?.provider?.name || 'claude';
+  const codexModel = (gateway.configData as any)?.provider?.codex?.model || 'default';
+
+  if (providerName === 'codex') {
+    return (
+      <div className="h-7 px-2 flex items-center rounded-lg text-[11px] text-muted-foreground bg-secondary/50">
+        codex: {codexModel}
+      </div>
+    );
+  }
+
+  return (
+    <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={disabled}>
+      <SelectTrigger size="sm" className="h-7 w-20 text-[11px] rounded-lg shadow-none">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" align="start">
+        {CLAUDE_MODELS.map(m => (
+          <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function ToolUseItem({ item }: { item: Extract<ChatItem, { type: 'tool_use' }> }) {
   const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   const hasOutput = item.output != null;
@@ -413,6 +445,8 @@ export function ChatView({ gateway }: Props) {
   };
 
   const connected = gateway.connectionState === 'connected';
+  const authenticated = gateway.providerInfo?.auth?.authenticated ?? true; // assume true until loaded
+  const isReady = connected && authenticated;
 
   // landing page — centered input with suggestions
   if (isEmpty) {
@@ -443,8 +477,8 @@ export function ChatView({ gateway }: Props) {
                 </div>
                 <h1 className="text-lg font-semibold text-foreground">{getGreeting()}</h1>
                 <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-                  <div className={cn('w-1.5 h-1.5 rounded-full', connected ? 'bg-success' : 'bg-destructive')} />
-                  {connected ? 'ready' : 'connecting...'}
+                  <div className={cn('w-1.5 h-1.5 rounded-full', isReady ? 'bg-success' : connected && !authenticated ? 'bg-warning' : connected ? 'bg-success' : 'bg-destructive')} />
+                  {!connected ? 'connecting...' : !authenticated ? 'set up provider in Settings' : 'ready'}
                 </div>
               </div>
 
@@ -455,28 +489,19 @@ export function ChatView({ gateway }: Props) {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={connected ? 'what can i help with?' : 'waiting for gateway...'}
-                  disabled={!connected}
+                  placeholder={!connected ? 'waiting for gateway...' : !authenticated ? 'set up your AI provider to get started' : 'what can i help with?'}
+                  disabled={!isReady}
                   className="w-full min-h-[80px] max-h-[200px] resize-none text-sm border-0 rounded-2xl bg-transparent shadow-none focus-visible:ring-0"
                   rows={2}
                 />
                 <div className="flex items-center px-3 pb-3">
-                  <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={!connected}>
-                    <SelectTrigger size="sm" className="h-7 w-20 text-[11px] rounded-lg shadow-none">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper" align="start">
-                      <SelectItem value="claude-opus-4-6" className="text-xs">opus</SelectItem>
-                      <SelectItem value="claude-sonnet-4-5-20250929" className="text-xs">sonnet</SelectItem>
-                      <SelectItem value="claude-haiku-4-5-20251001" className="text-xs">haiku</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <ModelSelector gateway={gateway} disabled={!connected} />
                   <span className="flex-1" />
                   <Button
                     size="sm"
                     className="h-8 w-8 p-0 rounded-lg"
                     onClick={() => { handleSend(); }}
-                    disabled={!input.trim() || sending || !connected}
+                    disabled={!input.trim() || sending || !isReady}
                   >
                     <ArrowUp className="w-4 h-4" />
                   </Button>
@@ -572,16 +597,7 @@ export function ChatView({ gateway }: Props) {
             rows={2}
           />
           <div className="flex items-center px-3 pb-3">
-            <Select value={gateway.model} onValueChange={gateway.changeModel} disabled={!connected}>
-              <SelectTrigger size="sm" className="h-7 w-20 text-[11px] rounded-lg shadow-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" align="start">
-                <SelectItem value="claude-opus-4-6" className="text-xs">opus</SelectItem>
-                <SelectItem value="claude-sonnet-4-5-20250929" className="text-xs">sonnet</SelectItem>
-                <SelectItem value="claude-haiku-4-5-20251001" className="text-xs">haiku</SelectItem>
-              </SelectContent>
-            </Select>
+            <ModelSelector gateway={gateway} disabled={!connected} />
             <span className="flex-1" />
             {isRunning ? (
               <Button
