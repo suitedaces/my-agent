@@ -1,25 +1,107 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import type { Provider, ProviderRunOptions, ProviderMessage, ProviderAuthStatus, ProviderQueryResult } from './types.js';
+
+const KEY_FILE = join(homedir(), '.dorabot', '.anthropic-key');
+
+function loadPersistedKey(): string | undefined {
+  try {
+    if (existsSync(KEY_FILE)) {
+      const key = readFileSync(KEY_FILE, 'utf-8').trim();
+      if (key) return key;
+    }
+  } catch { /* ignore */ }
+  return undefined;
+}
+
+function persistKey(apiKey: string): void {
+  try {
+    const dir = join(homedir(), '.dorabot');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(KEY_FILE, apiKey, { mode: 0o600 });
+    chmodSync(KEY_FILE, 0o600);
+  } catch (err) {
+    console.error('[claude] failed to persist API key:', err);
+  }
+}
+
+function getApiKey(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY || loadPersistedKey();
+}
+
+async function validateApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+    });
+    if (res.status === 200) return { valid: true };
+    if (res.status === 401) return { valid: false, error: 'Invalid API key' };
+    if (res.status === 403) return { valid: false, error: 'API key lacks permissions' };
+    return { valid: false, error: `Unexpected status ${res.status}` };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : 'Network error' };
+  }
+}
 
 export class ClaudeProvider implements Provider {
   readonly name = 'claude';
+  private _validated = false; // cache: key has been validated at least once this session
+
+  constructor() {
+    // Load persisted key into env if not already set
+    if (!process.env.ANTHROPIC_API_KEY) {
+      const saved = loadPersistedKey();
+      if (saved) process.env.ANTHROPIC_API_KEY = saved;
+    }
+  }
 
   async checkReady(): Promise<{ ready: boolean; reason?: string }> {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return { ready: false, reason: 'ANTHROPIC_API_KEY not set' };
+    const key = getApiKey();
+    if (!key) {
+      return { ready: false, reason: 'ANTHROPIC_API_KEY not set. Add it via Settings or set the environment variable.' };
+    }
+    // Validate on first check
+    if (!this._validated) {
+      const v = await validateApiKey(key);
+      if (!v.valid) return { ready: false, reason: v.error || 'Invalid API key' };
+      this._validated = true;
     }
     return { ready: true };
   }
 
   async getAuthStatus(): Promise<ProviderAuthStatus> {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const key = getApiKey();
+    if (!key) {
       return { authenticated: false, error: 'ANTHROPIC_API_KEY not set' };
     }
+    // If already validated this session, skip re-check
+    if (this._validated) {
+      return { authenticated: true, method: 'api_key' };
+    }
+    // Validate the key
+    const v = await validateApiKey(key);
+    if (!v.valid) {
+      return { authenticated: false, method: 'api_key', error: v.error };
+    }
+    this._validated = true;
     return { authenticated: true, method: 'api_key' };
   }
 
   async loginWithApiKey(apiKey: string): Promise<ProviderAuthStatus> {
+    // Validate first
+    const v = await validateApiKey(apiKey);
+    if (!v.valid) {
+      return { authenticated: false, method: 'api_key', error: v.error };
+    }
     process.env.ANTHROPIC_API_KEY = apiKey;
+    persistKey(apiKey);
+    this._validated = true;
     return { authenticated: true, method: 'api_key' };
   }
 
