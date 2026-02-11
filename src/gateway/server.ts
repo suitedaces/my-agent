@@ -722,6 +722,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         let agentSessionId = '';
         let agentUsage = { inputTokens: 0, outputTokens: 0, totalCostUsd: 0 };
         let usedMessageTool = false;
+        let hadStreamEvents = false;
 
         for await (const msg of gen) {
           const m = msg as Record<string, unknown>;
@@ -733,6 +734,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           }
 
           if (m.type === 'stream_event') {
+            hadStreamEvents = true;
             const event = m.event as Record<string, unknown>;
             broadcast({
               event: 'agent.stream',
@@ -801,10 +803,14 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           }
 
           if (m.type === 'assistant') {
-            broadcast({
-              event: 'agent.message',
-              data: { source, sessionKey, message: m, timestamp: Date.now() },
-            });
+            // Only broadcast full assistant messages for non-streaming providers (Codex).
+            // Claude streams via stream_event — broadcasting here too would cause duplicates.
+            if (!hadStreamEvents) {
+              broadcast({
+                event: 'agent.message',
+                data: { source, sessionKey, message: m, timestamp: Date.now() },
+              });
+            }
             const assistantMsg = m.message as Record<string, unknown>;
             const content = assistantMsg?.content as unknown[];
             if (Array.isArray(content)) {
