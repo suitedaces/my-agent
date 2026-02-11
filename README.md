@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="dorabot.png" width="120" />
+  <img src="desktop/public/dorabot.png" width="120" />
 
   # dorabot
 
