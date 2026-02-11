@@ -92,6 +92,8 @@ export type GatewayConfig = {
   port?: number;
   host?: string;
   enabled?: boolean;
+  tls?: boolean;
+  allowedOrigins?: string[];
   allowedPaths?: string[];
   deniedPaths?: string[];
 };
@@ -111,10 +113,19 @@ export type SecurityConfig = {
 
 export type ProviderName = 'claude' | 'codex';
 
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'max';
+
+export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+export type CodexApprovalPolicy = 'never' | 'on-request' | 'on-failure' | 'untrusted';
+export type CodexWebSearchMode = 'disabled' | 'cached' | 'live';
+
 export type CodexProviderConfig = {
   authMethod?: 'oauth' | 'api_key';
   model?: string;
-  approvalPolicy?: 'suggest' | 'auto-edit' | 'full-auto';
+  sandboxMode?: CodexSandboxMode;
+  approvalPolicy?: CodexApprovalPolicy;
+  networkAccess?: boolean;
+  webSearch?: CodexWebSearchMode;
 };
 
 export type ProviderConfig = {
@@ -125,6 +136,7 @@ export type ProviderConfig = {
 export type Config = {
   provider: ProviderConfig;
   model: string;
+  reasoningEffort?: ReasoningEffort;
   systemPromptMode: 'full' | 'minimal' | 'none';
   permissionMode: PermissionMode;
   skills: {
@@ -234,6 +246,7 @@ export const ALWAYS_DENIED = [
   '~/.dorabot/whatsapp/auth',
   '~/.dorabot/gateway-token',
   '~/.dorabot/codex-auth.json',
+  '~/.dorabot/tls',
   '~/.config/nanoclaw',
 ];
 

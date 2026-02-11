@@ -1,6 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'node:http';
-import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, renameSync, watch, type FSWatcher } from 'node:fs';
+import { createServer as createTlsServer } from 'node:https';
+import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, renameSync, chmodSync, watch, type FSWatcher } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { resolve as pathResolve, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -1503,6 +1505,17 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             return { id, result: { key, value } };
           }
 
+          if (key === 'reasoningEffort') {
+            const valid = ['minimal', 'low', 'medium', 'high', 'max', null];
+            if (value !== null && !valid.includes(value as string)) {
+              return { id, error: `reasoningEffort must be one of: ${valid.filter(Boolean).join(', ')} (or null to clear)` };
+            }
+            config.reasoningEffort = value as any;
+            saveConfig(config);
+            broadcast({ event: 'config.update', data: { key, value } });
+            return { id, result: { key, value } };
+          }
+
           if (key === 'provider.codex.model' && typeof value === 'string') {
             if (!config.provider.codex) config.provider.codex = {};
             config.provider.codex.model = value;
@@ -1512,10 +1525,38 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           }
 
           if (key === 'provider.codex.approvalPolicy' && typeof value === 'string') {
-            const valid = ['suggest', 'auto-edit', 'full-auto'];
+            const valid = ['never', 'on-request', 'on-failure', 'untrusted'];
             if (!valid.includes(value)) return { id, error: `approvalPolicy must be one of: ${valid.join(', ')}` };
             if (!config.provider.codex) config.provider.codex = {};
             config.provider.codex.approvalPolicy = value as any;
+            saveConfig(config);
+            broadcast({ event: 'config.update', data: { key, value } });
+            return { id, result: { key, value } };
+          }
+
+          if (key === 'provider.codex.sandboxMode' && typeof value === 'string') {
+            const valid = ['read-only', 'workspace-write', 'danger-full-access'];
+            if (!valid.includes(value)) return { id, error: `sandboxMode must be one of: ${valid.join(', ')}` };
+            if (!config.provider.codex) config.provider.codex = {};
+            config.provider.codex.sandboxMode = value as any;
+            saveConfig(config);
+            broadcast({ event: 'config.update', data: { key, value } });
+            return { id, result: { key, value } };
+          }
+
+          if (key === 'provider.codex.networkAccess' && typeof value === 'boolean') {
+            if (!config.provider.codex) config.provider.codex = {};
+            config.provider.codex.networkAccess = value;
+            saveConfig(config);
+            broadcast({ event: 'config.update', data: { key, value } });
+            return { id, result: { key, value } };
+          }
+
+          if (key === 'provider.codex.webSearch' && typeof value === 'string') {
+            const valid = ['disabled', 'cached', 'live'];
+            if (!valid.includes(value)) return { id, error: `webSearch must be one of: ${valid.join(', ')}` };
+            if (!config.provider.codex) config.provider.codex = {};
+            config.provider.codex.webSearch = value as any;
             saveConfig(config);
             broadcast({ event: 'config.update', data: { key, value } });
             return { id, result: { key, value } };
@@ -1906,18 +1947,61 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     }
   }
 
-  // start http + ws server
-  const httpServer = createServer((req, res) => {
+  // ── TLS setup ───────────────────────────────────────────────
+  const useTls = config.gateway?.tls !== false;
+  const tlsDir = join(homedir(), '.dorabot', 'tls');
+  const certPath = join(tlsDir, 'cert.pem');
+  const keyPath = join(tlsDir, 'key.pem');
+
+  if (useTls && (!existsSync(certPath) || !existsSync(keyPath))) {
+    console.log('[gateway] generating self-signed TLS certificate...');
+    mkdirSync(tlsDir, { recursive: true });
+    execSync(
+      `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 ` +
+      `-keyout "${keyPath}" -out "${certPath}" -days 3650 -nodes ` +
+      `-subj "/CN=dorabot-gateway" ` +
+      `-addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
+      { stdio: 'ignore' },
+    );
+    chmodSync(keyPath, 0o600);
+    chmodSync(certPath, 0o600);
+    console.log(`[gateway] TLS cert created at ${tlsDir}`);
+  }
+
+  // ── HTTP/HTTPS server ──────────────────────────────────────
+  const requestHandler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', uptime: Date.now() - startedAt }));
+      res.end(JSON.stringify({ status: 'ok', uptime: Date.now() - startedAt, tls: useTls }));
       return;
     }
     res.writeHead(404);
     res.end();
-  });
+  };
 
-  const wss = new WebSocketServer({ server: httpServer });
+  const httpServer = useTls
+    ? createTlsServer({ cert: readFileSync(certPath), key: readFileSync(keyPath) }, requestHandler)
+    : createServer(requestHandler);
+
+  // ── WebSocket origin validation ────────────────────────────
+  const allowedOrigins = new Set([
+    'http://localhost:5173',  // vite dev
+    'https://localhost:5173',
+    'file://',                // production Electron
+    ...(config.gateway?.allowedOrigins || []),
+  ]);
+
+  const wss = new WebSocketServer({
+    server: httpServer,
+    verifyClient: ({ req }: { req: import('node:http').IncomingMessage }) => {
+      const origin = req.headers.origin;
+      // no origin = non-browser client (Node WS, Electron, CLI) — allow
+      if (!origin) return true;
+      if (allowedOrigins.has(origin)) return true;
+      console.log(`[gateway] rejected WS connection from origin: ${origin}`);
+      return false;
+    },
+  });
 
   wss.on('connection', (ws) => {
     clients.set(ws, { authenticated: false });
@@ -1991,7 +2075,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
   await new Promise<void>((resolve) => {
     httpServer.listen(port, host, () => {
-      console.log(`[gateway] listening on ws://${host}:${port}`);
+      console.log(`[gateway] listening on ${useTls ? 'wss' : 'ws'}://${host}:${port}`);
       resolve();
     });
   });
