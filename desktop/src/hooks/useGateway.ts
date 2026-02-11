@@ -899,6 +899,10 @@ export function useGateway(url = 'wss://localhost:18789') {
     return await rpc('provider.check', { provider }) as { ready: boolean; reason?: string };
   }, [rpc]);
 
+  const getProviderAuth = useCallback(async (provider: string) => {
+    return await rpc('provider.auth.status', { provider }) as { authenticated: boolean; method?: string; identity?: string; error?: string };
+  }, [rpc]);
+
   const detectProviders = useCallback(async () => {
     return await rpc('provider.detect') as {
       claude: { installed: boolean; hasOAuth: boolean; hasApiKey: boolean };
@@ -967,6 +971,7 @@ export function useGateway(url = 'wss://localhost:18789') {
     startOAuth,
     completeOAuth,
     checkProvider,
+    getProviderAuth,
     detectProviders,
   };
 }

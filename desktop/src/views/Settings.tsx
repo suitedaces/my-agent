@@ -420,19 +420,32 @@ const CODEX_MODELS = [
 
 function AnthropicCard({ gateway, disabled }: { gateway: ReturnType<typeof useGateway>; disabled: boolean }) {
   const [showAuth, setShowAuth] = useState(false);
+  const [authStatus, setAuthStatus] = useState<{ authenticated: boolean; method?: string; identity?: string } | null>(null);
   const cfg = gateway.configData as Record<string, any> | null;
   const providerName = cfg?.provider?.name || 'claude';
   const isActive = providerName === 'claude';
   const currentModel = gateway.model || cfg?.model || 'claude-sonnet-4-5-20250929';
+
+  // Query auth independently — works even when not active
+  useEffect(() => {
+    gateway.getProviderAuth('claude').then(setAuthStatus).catch(() => {});
+  }, [gateway, isActive]);
+
+  // Sync from providerInfo when active
   const providerInfo = gateway.providerInfo;
-  const authenticated = isActive ? (providerInfo?.auth?.authenticated ?? false) : false;
-  const authMethod = providerInfo?.auth?.method;
-  const authIdentity = providerInfo?.auth?.identity;
+  useEffect(() => {
+    if (isActive && providerInfo?.auth) setAuthStatus(providerInfo.auth);
+  }, [isActive, providerInfo]);
+
+  const authenticated = authStatus?.authenticated ?? false;
+  const authMethod = authStatus?.method;
+  const authIdentity = authStatus?.identity;
 
   const handleAuthSuccess = useCallback(() => {
     setShowAuth(false);
-    gateway.getProviderStatus();
-  }, [gateway]);
+    gateway.getProviderAuth('claude').then(setAuthStatus).catch(() => {});
+    if (isActive) gateway.getProviderStatus();
+  }, [gateway, isActive]);
 
   const handleActivate = useCallback(async () => {
     if (!isActive) {
@@ -519,21 +532,31 @@ function AnthropicCard({ gateway, disabled }: { gateway: ReturnType<typeof useGa
 
 function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGateway>; disabled: boolean }) {
   const [showAuth, setShowAuth] = useState(false);
+  const [authStatus, setAuthStatus] = useState<{ authenticated: boolean; method?: string; identity?: string } | null>(null);
   const cfg = gateway.configData as Record<string, any> | null;
   const providerName = cfg?.provider?.name || 'claude';
   const isActive = providerName === 'codex';
   const codexModel = cfg?.provider?.codex?.model || 'gpt-5.3-codex';
 
-  // We only have provider info for the active provider.
-  // For the inactive one, show auth status based on last known or "unknown".
+  // Query auth independently — works even when not active
+  useEffect(() => {
+    gateway.getProviderAuth('codex').then(setAuthStatus).catch(() => {});
+  }, [gateway, isActive]);
+
+  // Sync from providerInfo when active
   const providerInfo = gateway.providerInfo;
-  const authenticated = isActive ? (providerInfo?.auth?.authenticated ?? false) : false;
-  const authMethod = providerInfo?.auth?.method;
+  useEffect(() => {
+    if (isActive && providerInfo?.auth) setAuthStatus(providerInfo.auth);
+  }, [isActive, providerInfo]);
+
+  const authenticated = authStatus?.authenticated ?? false;
+  const authMethod = authStatus?.method;
 
   const handleAuthSuccess = useCallback(() => {
     setShowAuth(false);
-    gateway.getProviderStatus();
-  }, [gateway]);
+    gateway.getProviderAuth('codex').then(setAuthStatus).catch(() => {});
+    if (isActive) gateway.getProviderStatus();
+  }, [gateway, isActive]);
 
   const handleActivate = useCallback(async () => {
     if (!isActive) {
@@ -572,16 +595,14 @@ function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGatew
               <div>
                 <div className="text-[11px] font-medium text-foreground flex items-center gap-1.5">
                   authentication
-                  {isActive && authenticated ? (
+                  {authenticated ? (
                     <Check className="w-3 h-3 text-success" />
                   ) : null}
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  {!isActive
-                    ? 'activate to check auth status'
-                    : authenticated
-                      ? `connected via ${authMethod === 'oauth' ? 'ChatGPT subscription' : 'API key'}`
-                      : 'not authenticated'}
+                  {authenticated
+                    ? `connected via ${authMethod === 'oauth' ? 'ChatGPT subscription' : 'API key'}`
+                    : 'not authenticated'}
                 </div>
               </div>
               <Button
@@ -591,7 +612,7 @@ function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGatew
                 onClick={() => setShowAuth(!showAuth)}
                 disabled={disabled}
               >
-                {showAuth ? 'cancel' : isActive && authenticated ? 'change' : 'set up'}
+                {showAuth ? 'cancel' : authenticated ? 'change' : 'set up'}
               </Button>
             </div>
 
