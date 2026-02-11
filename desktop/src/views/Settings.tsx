@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Shield, Brain, Globe, Settings2, Box, Lock, FolderLock, X, Plus, Wrench, Activity, Sun, Check, Sparkles } from 'lucide-react';
+import { Shield, Brain, Globe, Settings2, Box, Lock, FolderLock, X, Plus, Wrench, Activity, Sun, Check } from 'lucide-react';
 
 type Props = {
   gateway: ReturnType<typeof useGateway>;
@@ -31,12 +31,10 @@ export function SettingsView({ gateway }: Props) {
     }
   }, [gateway]);
 
-  const permissionMode = cfg?.permissionMode || 'default';
   const systemPromptMode = cfg?.systemPromptMode || 'full';
   const approvalMode = cfg?.security?.approvalMode || 'approve-sensitive';
   const browserEnabled = cfg?.browser?.enabled ?? false;
   const browserHeadless = cfg?.browser?.headless ?? false;
-  const reasoningEffort = cfg?.reasoningEffort as string | null;
 
   // sandbox
   const sandboxMode = cfg?.sandbox?.mode || 'off';
@@ -89,164 +87,31 @@ export function SettingsView({ gateway }: Props) {
             </CardContent>
           </Card>
 
-          {/* reasoning effort (codex only) */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <span className="text-xs font-semibold">Reasoning Effort</span>
-                <Badge variant="outline" className="text-[9px] h-4 ml-auto">Codex</Badge>
-              </div>
-              <SettingRow label="effort level" description="how much the Codex model reasons before responding (modelReasoningEffort)">
-                <Select
-                  value={reasoningEffort || 'off'}
-                  onValueChange={v => set('reasoningEffort', v === 'off' ? null : v)}
-                  disabled={disabled}
-                >
-                  <SelectTrigger className="h-7 w-40 text-[11px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="off" className="text-[11px]">auto (default)</SelectItem>
-                    <SelectItem value="minimal" className="text-[11px]">minimal</SelectItem>
-                    <SelectItem value="low" className="text-[11px]">low</SelectItem>
-                    <SelectItem value="medium" className="text-[11px]">medium</SelectItem>
-                    <SelectItem value="high" className="text-[11px]">high</SelectItem>
-                    <SelectItem value="max" className="text-[11px]">xhigh</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-              <div className="text-[10px] text-muted-foreground mt-3">
-                maps to Codex SDK modelReasoningEffort. gpt-5.3-codex and gpt-5.2-codex support all levels including xhigh.
-              </div>
-            </CardContent>
-          </Card>
-
           {/* anthropic provider */}
           <AnthropicCard gateway={gateway} disabled={disabled} />
 
           {/* openai provider */}
           <OpenAICard gateway={gateway} disabled={disabled} />
 
-          {/* permissions — provider-specific */}
+          {/* gateway approval — shared across providers */}
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-4">
                 <Shield className="w-4 h-4 text-primary" />
-                <span className="text-xs font-semibold">Permissions & Approval</span>
+                <span className="text-xs font-semibold">Gateway Approval</span>
               </div>
-
-              <div className="space-y-4">
-                {/* shared: gateway approval mode */}
-                <SettingRow label="gateway approval" description="gateway-level tool classification (all providers)">
-                  <Select value={approvalMode} onValueChange={v => set('security.approvalMode', v)} disabled={disabled}>
-                    <SelectTrigger className="h-7 w-40 text-[11px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="approve-sensitive" className="text-[11px]">approve sensitive</SelectItem>
-                      <SelectItem value="autonomous" className="text-[11px]">autonomous</SelectItem>
-                      <SelectItem value="lockdown" className="text-[11px]">lockdown</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </SettingRow>
-
-                {/* claude-specific */}
-                <div className="pt-2 border-t border-border">
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <img src="/claude-icon.svg" alt="" className="w-3 h-3" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Claude Code</span>
-                  </div>
-                  <div className="space-y-4">
-                    <SettingRow label="permission mode" description="how Claude Code SDK handles tool permissions">
-                      <Select value={permissionMode} onValueChange={v => set('permissionMode', v)} disabled={disabled}>
-                        <SelectTrigger className="h-7 w-40 text-[11px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="default" className="text-[11px]">default</SelectItem>
-                          <SelectItem value="acceptEdits" className="text-[11px]">accept edits</SelectItem>
-                          <SelectItem value="bypassPermissions" className="text-[11px]">bypass all</SelectItem>
-                          <SelectItem value="plan" className="text-[11px]">plan only</SelectItem>
-                          <SelectItem value="dontAsk" className="text-[11px]">don't ask</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </SettingRow>
-                    {permissionMode === 'bypassPermissions' && (
-                      <div className="text-[10px] text-warning bg-warning/10 rounded px-2 py-1.5">
-                        Claude Code auto-approves all tools
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* codex-specific */}
-                <div className="pt-2 border-t border-border">
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <img src="/openai-icon.svg" alt="" className="w-3 h-3" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Codex</span>
-                  </div>
-                  <div className="space-y-4">
-                    <SettingRow label="sandbox" description="execution isolation for Codex agent">
-                      <Select
-                        value={cfg?.provider?.codex?.sandboxMode || 'danger-full-access'}
-                        onValueChange={v => set('provider.codex.sandboxMode', v)}
-                        disabled={disabled}
-                      >
-                        <SelectTrigger className="h-7 w-40 text-[11px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="read-only" className="text-[11px]">read-only</SelectItem>
-                          <SelectItem value="workspace-write" className="text-[11px]">workspace write</SelectItem>
-                          <SelectItem value="danger-full-access" className="text-[11px]">full access</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </SettingRow>
-
-                    <SettingRow label="approval" description="when Codex asks before acting">
-                      <Select
-                        value={cfg?.provider?.codex?.approvalPolicy || 'never'}
-                        onValueChange={v => set('provider.codex.approvalPolicy', v)}
-                        disabled={disabled}
-                      >
-                        <SelectTrigger className="h-7 w-40 text-[11px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="never" className="text-[11px]">never (auto)</SelectItem>
-                          <SelectItem value="on-request" className="text-[11px]">on request</SelectItem>
-                          <SelectItem value="on-failure" className="text-[11px]">on failure</SelectItem>
-                          <SelectItem value="untrusted" className="text-[11px]">untrusted</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </SettingRow>
-
-                    <SettingRow label="web search" description="allow Codex to search the web">
-                      <Select
-                        value={cfg?.provider?.codex?.webSearch || 'disabled'}
-                        onValueChange={v => set('provider.codex.webSearch', v)}
-                        disabled={disabled}
-                      >
-                        <SelectTrigger className="h-7 w-40 text-[11px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="disabled" className="text-[11px]">disabled</SelectItem>
-                          <SelectItem value="cached" className="text-[11px]">cached</SelectItem>
-                          <SelectItem value="live" className="text-[11px]">live</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </SettingRow>
-
-                    {cfg?.provider?.codex?.sandboxMode === 'danger-full-access' && cfg?.provider?.codex?.approvalPolicy === 'never' && (
-                      <div className="text-[10px] text-warning bg-warning/10 rounded px-2 py-1.5">
-                        Codex has full system access with no approval — use caution
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <SettingRow label="approval mode" description="gateway-level tool classification (all providers)">
+                <Select value={approvalMode} onValueChange={v => set('security.approvalMode', v)} disabled={disabled}>
+                  <SelectTrigger className="h-7 w-40 text-[11px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approve-sensitive" className="text-[11px]">approve sensitive</SelectItem>
+                    <SelectItem value="autonomous" className="text-[11px]">autonomous</SelectItem>
+                    <SelectItem value="lockdown" className="text-[11px]">lockdown</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
             </CardContent>
           </Card>
 
@@ -422,20 +287,20 @@ function AnthropicCard({ gateway, disabled }: { gateway: ReturnType<typeof useGa
   const [showAuth, setShowAuth] = useState(false);
   const [authStatus, setAuthStatus] = useState<{ authenticated: boolean; method?: string; identity?: string } | null>(null);
   const cfg = gateway.configData as Record<string, any> | null;
-  const providerName = cfg?.provider?.name || 'claude';
-  const isActive = providerName === 'claude';
   const currentModel = gateway.model || cfg?.model || 'claude-sonnet-4-5-20250929';
+  const permissionMode = cfg?.permissionMode || 'default';
 
-  // Query auth independently — works even when not active
+  // Query auth independently
   useEffect(() => {
     gateway.getProviderAuth('claude').then(setAuthStatus).catch(() => {});
-  }, [gateway, isActive]);
+  }, [gateway]);
 
   // Sync from providerInfo when active
   const providerInfo = gateway.providerInfo;
+  const providerName = cfg?.provider?.name || 'claude';
   useEffect(() => {
-    if (isActive && providerInfo?.auth) setAuthStatus(providerInfo.auth);
-  }, [isActive, providerInfo]);
+    if (providerName === 'claude' && providerInfo?.auth) setAuthStatus(providerInfo.auth);
+  }, [providerName, providerInfo]);
 
   const authenticated = authStatus?.authenticated ?? false;
   const authMethod = authStatus?.method;
@@ -444,29 +309,19 @@ function AnthropicCard({ gateway, disabled }: { gateway: ReturnType<typeof useGa
   const handleAuthSuccess = useCallback(() => {
     setShowAuth(false);
     gateway.getProviderAuth('claude').then(setAuthStatus).catch(() => {});
-    if (isActive) gateway.getProviderStatus();
-  }, [gateway, isActive]);
+    if (providerName === 'claude') gateway.getProviderStatus();
+  }, [gateway, providerName]);
 
-  const handleActivate = useCallback(async () => {
-    if (!isActive) {
-      const res = await gateway.setProvider('claude');
-      if (!res.auth.authenticated) setShowAuth(true);
-    }
-  }, [gateway, isActive]);
+  const set = useCallback(async (key: string, value: unknown) => {
+    try { await gateway.setConfig(key, value); } catch (err) { console.error(`failed to set ${key}:`, err); }
+  }, [gateway]);
 
   return (
-    <Card className={isActive ? 'border-primary/30' : ''}>
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4">
           <img src="/claude-icon.svg" alt="Anthropic" className="w-4 h-4" />
           <span className="text-xs font-semibold">Anthropic</span>
-          {isActive ? (
-            <Badge variant="outline" className="text-[9px] h-4 ml-auto text-primary border-primary/30">active</Badge>
-          ) : (
-            <Button variant="outline" size="sm" className="h-5 text-[9px] px-2 ml-auto" onClick={handleActivate} disabled={disabled}>
-              activate
-            </Button>
-          )}
         </div>
 
         <div className="space-y-4">
@@ -510,19 +365,38 @@ function AnthropicCard({ gateway, disabled }: { gateway: ReturnType<typeof useGa
           </div>
 
           {/* model selector */}
-          {isActive && (
-            <SettingRow label="model" description="default model for new chats">
-              <Select value={currentModel} onValueChange={gateway.changeModel} disabled={disabled}>
-                <SelectTrigger className="h-7 w-40 text-[11px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CLAUDE_MODELS.map(m => (
-                    <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingRow>
+          <SettingRow label="model" description="default model for new chats">
+            <Select value={currentModel} onValueChange={gateway.changeModel} disabled={disabled}>
+              <SelectTrigger className="h-7 w-40 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CLAUDE_MODELS.map(m => (
+                  <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {/* permission mode */}
+          <SettingRow label="permission mode" description="how Claude Code SDK handles tool permissions">
+            <Select value={permissionMode} onValueChange={v => set('permissionMode', v)} disabled={disabled}>
+              <SelectTrigger className="h-7 w-40 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default" className="text-[11px]">default</SelectItem>
+                <SelectItem value="acceptEdits" className="text-[11px]">accept edits</SelectItem>
+                <SelectItem value="bypassPermissions" className="text-[11px]">bypass all</SelectItem>
+                <SelectItem value="plan" className="text-[11px]">plan only</SelectItem>
+                <SelectItem value="dontAsk" className="text-[11px]">don't ask</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+          {permissionMode === 'bypassPermissions' && (
+            <div className="text-[10px] text-warning bg-warning/10 rounded px-2 py-1.5">
+              Claude Code auto-approves all tools
+            </div>
           )}
         </div>
       </CardContent>
@@ -534,20 +408,23 @@ function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGatew
   const [showAuth, setShowAuth] = useState(false);
   const [authStatus, setAuthStatus] = useState<{ authenticated: boolean; method?: string; identity?: string } | null>(null);
   const cfg = gateway.configData as Record<string, any> | null;
-  const providerName = cfg?.provider?.name || 'claude';
-  const isActive = providerName === 'codex';
   const codexModel = cfg?.provider?.codex?.model || 'gpt-5.3-codex';
+  const reasoningEffort = cfg?.reasoningEffort as string | null;
+  const sandboxMode = cfg?.provider?.codex?.sandboxMode || 'danger-full-access';
+  const approvalPolicy = cfg?.provider?.codex?.approvalPolicy || 'never';
+  const webSearch = cfg?.provider?.codex?.webSearch || 'disabled';
 
-  // Query auth independently — works even when not active
+  // Query auth independently
   useEffect(() => {
     gateway.getProviderAuth('codex').then(setAuthStatus).catch(() => {});
-  }, [gateway, isActive]);
+  }, [gateway]);
 
   // Sync from providerInfo when active
   const providerInfo = gateway.providerInfo;
+  const providerName = cfg?.provider?.name || 'claude';
   useEffect(() => {
-    if (isActive && providerInfo?.auth) setAuthStatus(providerInfo.auth);
-  }, [isActive, providerInfo]);
+    if (providerName === 'codex' && providerInfo?.auth) setAuthStatus(providerInfo.auth);
+  }, [providerName, providerInfo]);
 
   const authenticated = authStatus?.authenticated ?? false;
   const authMethod = authStatus?.method;
@@ -555,37 +432,19 @@ function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGatew
   const handleAuthSuccess = useCallback(() => {
     setShowAuth(false);
     gateway.getProviderAuth('codex').then(setAuthStatus).catch(() => {});
-    if (isActive) gateway.getProviderStatus();
-  }, [gateway, isActive]);
+    if (providerName === 'codex') gateway.getProviderStatus();
+  }, [gateway, providerName]);
 
-  const handleActivate = useCallback(async () => {
-    if (!isActive) {
-      const res = await gateway.setProvider('codex');
-      if (!res.auth.authenticated) setShowAuth(true);
-    }
-  }, [gateway, isActive]);
-
-  const handleCodexModelChange = useCallback(async (value: string) => {
-    try {
-      await gateway.setConfig('provider.codex.model', value);
-    } catch (err) {
-      console.error('failed to set codex model:', err);
-    }
+  const set = useCallback(async (key: string, value: unknown) => {
+    try { await gateway.setConfig(key, value); } catch (err) { console.error(`failed to set ${key}:`, err); }
   }, [gateway]);
 
   return (
-    <Card className={isActive ? 'border-primary/30' : ''}>
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4">
           <img src="/openai-icon.svg" alt="OpenAI" className="w-4 h-4" />
           <span className="text-xs font-semibold">OpenAI</span>
-          {isActive ? (
-            <Badge variant="outline" className="text-[9px] h-4 ml-auto text-primary border-primary/30">active</Badge>
-          ) : (
-            <Button variant="outline" size="sm" className="h-5 text-[9px] px-2 ml-auto" onClick={handleActivate} disabled={disabled}>
-              activate
-            </Button>
-          )}
         </div>
 
         <div className="space-y-4">
@@ -629,19 +488,87 @@ function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGatew
           </div>
 
           {/* model selector */}
-          {isActive && (
-            <SettingRow label="model" description="codex model for agent runs">
-              <Select value={codexModel} onValueChange={handleCodexModelChange} disabled={disabled}>
-                <SelectTrigger className="h-7 w-44 text-[11px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CODEX_MODELS.map(m => (
-                    <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingRow>
+          <SettingRow label="model" description="codex model for agent runs">
+            <Select value={codexModel} onValueChange={v => set('provider.codex.model', v)} disabled={disabled}>
+              <SelectTrigger className="h-7 w-44 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CODEX_MODELS.map(m => (
+                  <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {/* reasoning effort */}
+          <SettingRow label="reasoning effort" description="how much the model reasons before responding">
+            <Select
+              value={reasoningEffort || 'off'}
+              onValueChange={v => set('reasoningEffort', v === 'off' ? null : v)}
+              disabled={disabled}
+            >
+              <SelectTrigger className="h-7 w-40 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off" className="text-[11px]">auto (default)</SelectItem>
+                <SelectItem value="minimal" className="text-[11px]">minimal</SelectItem>
+                <SelectItem value="low" className="text-[11px]">low</SelectItem>
+                <SelectItem value="medium" className="text-[11px]">medium</SelectItem>
+                <SelectItem value="high" className="text-[11px]">high</SelectItem>
+                <SelectItem value="max" className="text-[11px]">xhigh</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {/* sandbox */}
+          <SettingRow label="sandbox" description="execution isolation for Codex agent">
+            <Select value={sandboxMode} onValueChange={v => set('provider.codex.sandboxMode', v)} disabled={disabled}>
+              <SelectTrigger className="h-7 w-40 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="read-only" className="text-[11px]">read-only</SelectItem>
+                <SelectItem value="workspace-write" className="text-[11px]">workspace write</SelectItem>
+                <SelectItem value="danger-full-access" className="text-[11px]">full access</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {/* approval */}
+          <SettingRow label="approval" description="when Codex asks before acting">
+            <Select value={approvalPolicy} onValueChange={v => set('provider.codex.approvalPolicy', v)} disabled={disabled}>
+              <SelectTrigger className="h-7 w-40 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="never" className="text-[11px]">never (auto)</SelectItem>
+                <SelectItem value="on-request" className="text-[11px]">on request</SelectItem>
+                <SelectItem value="on-failure" className="text-[11px]">on failure</SelectItem>
+                <SelectItem value="untrusted" className="text-[11px]">untrusted</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {/* web search */}
+          <SettingRow label="web search" description="allow Codex to search the web">
+            <Select value={webSearch} onValueChange={v => set('provider.codex.webSearch', v)} disabled={disabled}>
+              <SelectTrigger className="h-7 w-40 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="disabled" className="text-[11px]">disabled</SelectItem>
+                <SelectItem value="cached" className="text-[11px]">cached</SelectItem>
+                <SelectItem value="live" className="text-[11px]">live</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {sandboxMode === 'danger-full-access' && approvalPolicy === 'never' && (
+            <div className="text-[10px] text-warning bg-warning/10 rounded px-2 py-1.5">
+              Codex has full system access with no approval — use caution
+            </div>
           )}
         </div>
       </CardContent>
