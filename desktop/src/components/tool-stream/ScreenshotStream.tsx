@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "motion/react"
 import { Camera, Aperture } from "lucide-react"
 import type { ToolUIProps } from "../tool-ui"
+import { ElapsedTime } from "./ElapsedTime"
 
 function Viewfinder() {
   const corners = [
@@ -63,11 +64,15 @@ export function ScreenshotStream({ input, output, imageData, isError, streaming 
           {streaming ? "capturing..." : done ? "captured" : "screenshot"}
         </span>
         {streaming && (
-          <motion.div
-            className="w-2 h-2 rounded-full bg-destructive ml-auto"
-            animate={{ opacity: [1, 0.3, 1] }}
-            transition={{ duration: 0.8, repeat: Infinity }}
-          />
+          <>
+            <span className="flex-1" />
+            <ElapsedTime running={true} />
+            <motion.div
+              className="w-2 h-2 rounded-full bg-destructive"
+              animate={{ opacity: [1, 0.3, 1] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+            />
+          </>
         )}
       </div>
 

@@ -9,7 +9,7 @@ export type ProviderRunOptions = {
   resumeId?: string;
   cwd: string;
   env: Record<string, string>;
-  maxTurns: number;
+  maxTurns?: number;
   abortController?: AbortController;
   canUseTool?: (toolName: string, input: Record<string, unknown>, options: unknown) => Promise<unknown>;
   // Agent definitions, hooks, MCP servers - provider-specific, passed via config

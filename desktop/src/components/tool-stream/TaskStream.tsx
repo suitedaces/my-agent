@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { Bot, Cpu, Zap, Terminal, FileText, Search, Globe, Brain, Wrench } from "lucide-react"
 import type { ToolUIProps } from "../tool-ui"
 import { safeParse } from "../../lib/safe-parse"
+import { ElapsedTime } from "./ElapsedTime"
 
 type SubItem = {
   type: string
@@ -143,6 +144,7 @@ export function TaskStream({ input, output, isError, streaming, subItems }: Tool
             >
               <Zap className="w-2.5 h-2.5" />
               working...
+              <ElapsedTime running={true} />
             </motion.div>
           )}
         </div>

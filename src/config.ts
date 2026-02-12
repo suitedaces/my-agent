@@ -152,6 +152,7 @@ export type Config = {
   gateway?: GatewayConfig;
   browser?: BrowserConfig;
   security?: SecurityConfig;
+  maxTurns?: number;
   sessionDir: string;
   cwd: string;
 };

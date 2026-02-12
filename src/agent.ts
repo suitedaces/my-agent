@@ -158,7 +158,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     resumeId,
     cwd: config.cwd,
     env: cleanEnvForSdk(),
-    maxTurns: 50,
+    maxTurns: config.maxTurns ?? undefined,
     canUseTool: opts.canUseTool,
     agents: agents as any,
     hooks: hooks as any,

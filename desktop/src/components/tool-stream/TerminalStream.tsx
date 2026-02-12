@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "motion/react"
 import type { ToolUIProps } from "../tool-ui"
 import { safeParse } from "../../lib/safe-parse"
+import { ElapsedTime } from "./ElapsedTime"
 
 export function TerminalStream({ input, output, isError, streaming }: ToolUIProps) {
   const parsed = safeParse(input)
@@ -29,6 +30,7 @@ export function TerminalStream({ input, output, isError, streaming }: ToolUIProp
           <div className="w-2.5 h-2.5 rounded-full bg-success/70" />
         </div>
         <span className="text-[10px] text-muted-foreground/60 ml-2">terminal</span>
+        <ElapsedTime running={!!streaming} />
         {bg && (
           <motion.span
             className="text-[9px] text-warning/80 ml-auto px-1.5 py-0.5 rounded bg-warning/10 border border-warning/20"

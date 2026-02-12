@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { Monitor, Lock, RotateCw, ArrowLeft, ArrowRight, X, Minus, Maximize2 } from "lucide-react"
 import type { ToolUIProps } from "../tool-ui"
 import { safeParse } from "../../lib/safe-parse"
+import { ElapsedTime } from "./ElapsedTime"
 
 const ACTION_LABELS: Record<string, string> = {
   open: "navigating", click: "clicking", type: "typing", fill: "filling",
@@ -42,6 +43,8 @@ export function BrowserStream({ input, output, imageData, isError, streaming }: 
             <RotateCw className={`w-2.5 h-2.5 ${streaming ? 'animate-spin opacity-60' : 'opacity-40'}`} />
           )}
         </div>
+        <span className="flex-1" />
+        <ElapsedTime running={!!streaming} />
       </div>
 
       {/* address bar */}

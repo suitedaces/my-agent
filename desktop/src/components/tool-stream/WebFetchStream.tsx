@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { Globe, ArrowDown, FileText } from "lucide-react"
 import type { ToolUIProps } from "../tool-ui"
 import { safeParse } from "../../lib/safe-parse"
+import { ElapsedTime } from "./ElapsedTime"
 
 function DownloadWave() {
   return (
@@ -94,7 +95,7 @@ export function WebFetchStream({ input, output, isError, streaming }: ToolUIProp
             <div className="text-[9px] text-muted-foreground/40 truncate">{url}</div>
           )}
         </div>
-        {streaming && <DownloadWave />}
+        {streaming && <><ElapsedTime running={true} /><DownloadWave /></>}
         {done && (
           <motion.span
             className={`text-[9px] px-1.5 py-0.5 rounded ${

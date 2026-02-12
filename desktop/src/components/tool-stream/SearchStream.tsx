@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { Search, Globe, ExternalLink } from "lucide-react"
 import type { ToolUIProps } from "../tool-ui"
 import { safeParse } from "../../lib/safe-parse"
+import { ElapsedTime } from "./ElapsedTime"
 
 function RadarPulse() {
   return (
@@ -68,11 +69,14 @@ export function SearchStream({ input, output, isError, streaming }: ToolUIProps)
             )}
           </span>
           {streaming && (
-            <motion.div
-              className="w-3.5 h-3.5 rounded-full border-2 border-primary/50 border-t-primary"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-            />
+            <>
+              <ElapsedTime running={true} />
+              <motion.div
+                className="w-3.5 h-3.5 rounded-full border-2 border-primary/50 border-t-primary"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+              />
+            </>
           )}
         </div>
       </div>
