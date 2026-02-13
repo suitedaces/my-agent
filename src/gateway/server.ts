@@ -830,6 +830,14 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (m.type === 'stream_event') {
             hadStreamEvents = true;
             const event = m.event as Record<string, unknown>;
+
+            // new turn starting — re-activate if idle between turns
+            if (event.type === 'message_start' && !sessionRegistry.get(sessionKey)?.activeRun) {
+              sessionRegistry.setActiveRun(sessionKey, true);
+              broadcast({ event: 'status.update', data: { activeRun: true, source, sessionKey } });
+              broadcastSessionUpdate(sessionKey);
+            }
+
             broadcast({
               event: 'agent.stream',
               data: { source, sessionKey, event, parentToolUseId: m.parent_tool_use_id || null, timestamp: Date.now() },
@@ -1066,6 +1074,11 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
                 try { await h.send(ctx.chatId, agentText); } catch {}
               }
             }
+
+            // per-turn: mark idle so sidebar spinner stops
+            sessionRegistry.setActiveRun(sessionKey, false);
+            broadcast({ event: 'status.update', data: { activeRun: false, source, sessionKey } });
+            broadcastSessionUpdate(sessionKey);
 
             // reset for next turn (persistent sessions get multiple result events)
             usedMessageTool = false;

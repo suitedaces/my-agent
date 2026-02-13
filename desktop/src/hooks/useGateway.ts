@@ -547,11 +547,13 @@ export function useGateway(url = 'wss://localhost:18789') {
         setSessions(prev => {
           const idx = prev.findIndex(s => s.id === d.id);
           if (idx >= 0) {
+            const existing = prev[idx];
+            // skip if nothing actually changed (avoid rerender)
+            if (existing.activeRun === d.activeRun && existing.messageCount === d.messageCount) return prev;
             const updated = [...prev];
-            updated[idx] = { ...updated[idx], ...d };
+            updated[idx] = { ...existing, ...d };
             return updated;
           }
-          // new session — insert at top (most recent)
           return [d, ...prev];
         });
         break;
