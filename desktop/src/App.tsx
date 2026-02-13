@@ -107,6 +107,20 @@ export default function App() {
     return gw.sessions.filter(s => (s.channel || 'desktop') === sessionFilter);
   }, [gw.sessions, sessionFilter]);
 
+  // Track which sessions are visible across all panes (for sidebar highlighting)
+  const visibleSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const group of layout.visibleGroups) {
+      if (group.activeTabId) {
+        const tab = tabState.tabs.find(t => t.id === group.activeTabId);
+        if (tab && isChatTab(tab) && tab.sessionId) {
+          ids.add(tab.sessionId);
+        }
+      }
+    }
+    return ids;
+  }, [layout.visibleGroups, tabState.tabs]);
+
   const handleViewSession = useCallback((sessionId: string, channel?: string, chatId?: string, chatType?: string) => {
     const ch = channel || 'desktop';
     const ct = chatType || 'dm';
@@ -202,11 +216,20 @@ export default function App() {
 
     const overId = over.id as string;
 
+    // Helper: sync gateway after moving a tab
+    const syncAfterMove = (tid: string) => {
+      const tab = tabState.tabs.find(t => t.id === tid);
+      if (tab && isChatTab(tab)) {
+        gw.setActiveSession(tab.sessionKey, tab.chatId);
+      }
+    };
+
     // Dropped on a group's tab bar — move tab to that group
     if (overId.startsWith('group-drop:')) {
       const targetGroupId = over.data.current?.groupId as GroupId;
       if (sourceGroupId && targetGroupId && sourceGroupId !== targetGroupId) {
         layout.moveTabToGroup(tabId, sourceGroupId, targetGroupId);
+        syncAfterMove(tabId);
       }
       return;
     }
@@ -221,6 +244,7 @@ export default function App() {
       if (zone === 'center') {
         if (sourceGroupId !== targetGroupId) {
           layout.moveTabToGroup(tabId, sourceGroupId, targetGroupId);
+          syncAfterMove(tabId);
         }
         return;
       }
@@ -299,7 +323,19 @@ export default function App() {
     onViewSession: handleViewSession,
     onSwitchChannel: setSelectedChannel,
     onClearSelectedFile: () => setSelectedFile(null),
-    onSetupChat: (prompt: string) => gw.sendMessage(prompt),
+    onSetupChat: (prompt: string) => {
+      // Create/focus a chat tab in THIS group, then send
+      const group = layout.groups.find(g => g.id === groupId);
+      const existingChat = group?.tabIds
+        .map(id => tabState.tabs.find(t => t.id === id))
+        .find(t => t && isChatTab(t));
+      if (existingChat) {
+        tabState.focusTab(existingChat.id, groupId);
+      } else {
+        tabState.newChatTab(groupId);
+      }
+      setTimeout(() => gw.sendMessage(prompt), 0);
+    },
     onNavClick: (navId: string) => handleNavClick(navId as TabType),
   }), [tabState, gw, selectedFile, selectedChannel, layout, handleNavClick, handleViewSession, draggingTab]);
 
@@ -515,12 +551,15 @@ export default function App() {
                 <ScrollArea className="flex-1 min-h-0 px-2 pb-2">
                   {filteredSessions.slice(0, 30).map(s => {
                     const isActive = tabState.activeTab && isChatTab(tabState.activeTab) && tabState.activeTab.sessionId === s.id;
+                    const isVisible = !isActive && visibleSessionIds.has(s.id);
                     return (
                       <button
                         key={s.id}
                         className={`flex items-center gap-1.5 w-full px-2.5 py-1 rounded-md text-[10px] transition-colors ${
                           isActive
                             ? 'bg-secondary text-foreground'
+                            : isVisible
+                            ? 'bg-secondary/60 text-foreground/80'
                             : 'text-muted-foreground hover:bg-secondary/50'
                         }`}
                         onClick={() => handleViewSession(s.id, s.channel, s.chatId, s.chatType)}

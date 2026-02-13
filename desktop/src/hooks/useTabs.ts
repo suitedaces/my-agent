@@ -5,12 +5,6 @@ import type { GroupId } from './useLayout';
 
 export type TabType = 'chat' | 'channels' | 'goals' | 'automation' | 'skills' | 'memory' | 'settings';
 
-export type FileExplorerState = {
-  viewRoot: string;
-  expanded: string[];
-  selectedPath: string | null;
-};
-
 export type ChatTab = {
   id: string;
   type: 'chat';
@@ -20,7 +14,6 @@ export type ChatTab = {
   chatId: string;
   channel?: string;
   sessionId?: string;
-  fileExplorer?: FileExplorerState;
 };
 
 export type ViewTab = {
@@ -28,7 +21,6 @@ export type ViewTab = {
   type: Exclude<TabType, 'chat'>;
   label: string;
   closable: true;
-  fileExplorer?: FileExplorerState;
 };
 
 export type Tab = ChatTab | ViewTab;
@@ -352,13 +344,6 @@ export function useTabs(gw: ReturnType<typeof useGateway>, layout: ReturnType<ty
     setTabs(prev => prev.map(t => t.id === tabId ? { ...t, label } : t));
   }, []);
 
-  const updateTabFileExplorer = useCallback((tabId: string, patch: Partial<FileExplorerState>) => {
-    setTabs(prev => prev.map(t => {
-      if (t.id !== tabId) return t;
-      return { ...t, fileExplorer: { viewRoot: '', expanded: [], selectedPath: null, ...t.fileExplorer, ...patch } };
-    }));
-  }, []);
-
   // Next/prev within the active group's tabs
   const nextTab = useCallback(() => {
     const group = layout.groups.find(g => g.id === layout.activeGroupId);
@@ -397,7 +382,6 @@ export function useTabs(gw: ReturnType<typeof useGateway>, layout: ReturnType<ty
     openViewTab,
     newChatTab,
     updateTabLabel,
-    updateTabFileExplorer,
     nextTab,
     prevTab,
     focusTabByIndex,

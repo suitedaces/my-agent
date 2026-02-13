@@ -130,10 +130,7 @@ export function EditorGroupPanel({
         return (
           <SoulView
             gateway={gateway}
-            onSetupChat={(prompt) => {
-              onSetupChat(prompt);
-              onNavClick('chat');
-            }}
+            onSetupChat={onSetupChat}
           />
         );
       case 'settings':
