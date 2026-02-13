@@ -1,5 +1,14 @@
 import type { Config } from '../config.js';
 
+export type RunHandle = {
+  /** Push a user message into the active run's async generator */
+  inject(text: string): boolean;
+  /** End the generator → SDK CLI process exits */
+  close(): void;
+  /** Whether the generator is still alive */
+  readonly active: boolean;
+};
+
 export type ProviderRunOptions = {
   prompt: string;
   systemPrompt: string;
@@ -17,6 +26,8 @@ export type ProviderRunOptions = {
   hooks?: unknown;
   mcpServer?: unknown; // in-process MCP server (Claude) or command spec (Codex)
   sandbox?: unknown;
+  /** Called once the async message generator is ready, before SDK query starts */
+  onRunReady?: (handle: RunHandle) => void;
 };
 
 // Messages emitted by providers - matches Claude SDK message format

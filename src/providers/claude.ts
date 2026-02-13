@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
-import type { Provider, ProviderRunOptions, ProviderMessage, ProviderAuthStatus, ProviderQueryResult } from './types.js';
+import type { Provider, ProviderRunOptions, ProviderMessage, ProviderAuthStatus, ProviderQueryResult, RunHandle } from './types.js';
 
 // ── File paths ──────────────────────────────────────────────────────
 const DORABOT_DIR = join(homedir(), '.dorabot');
@@ -346,8 +346,76 @@ export class ClaudeProvider implements Provider {
     // Ensure OAuth token is fresh before querying
     await ensureOAuthToken();
 
+    // ── Async generator message feed (buffett pattern) ──────────────
+    // Instead of passing a string prompt to query(), we create an async
+    // generator that keeps the SDK CLI process alive for message injection.
+    // SDK constraint: string prompt → isSingleUserTurn=true → closes stdin
+    // after first result. AsyncIterable prompt → keeps stdin open.
+
+    type UserMsg = {
+      type: 'user';
+      session_id: string;
+      message: { role: 'user'; content: Array<{ type: 'text'; text: string }> };
+      parent_tool_use_id: null;
+    };
+
+    const messageQueue: UserMsg[] = [];
+    let waitingForMessage: ((msg: UserMsg) => void) | null = null;
+    let closed = false;
+
+    const makeUserMsg = (text: string): UserMsg => ({
+      type: 'user',
+      session_id: '',
+      message: { role: 'user', content: [{ type: 'text', text }] },
+      parent_tool_use_id: null,
+    });
+
+    // Seed the queue with the initial prompt
+    messageQueue.push(makeUserMsg(opts.prompt));
+
+    async function* messageGenerator(): AsyncGenerator<UserMsg, void, unknown> {
+      while (!closed && !opts.abortController?.signal.aborted) {
+        if (messageQueue.length > 0) {
+          yield messageQueue.shift()!;
+        } else {
+          const msg = await new Promise<UserMsg>((resolve) => {
+            waitingForMessage = resolve;
+          });
+          waitingForMessage = null;
+          if (closed || opts.abortController?.signal.aborted) break;
+          yield msg;
+        }
+      }
+    }
+
+    // Create RunHandle for the gateway to inject messages
+    const handle: RunHandle = {
+      get active() { return !closed; },
+      inject(text: string): boolean {
+        if (closed) return false;
+        const msg = makeUserMsg(text);
+        if (waitingForMessage) {
+          waitingForMessage(msg);
+        } else {
+          messageQueue.push(msg);
+        }
+        return true;
+      },
+      close() {
+        closed = true;
+        // Unblock the generator if it's suspended in await
+        if (waitingForMessage) {
+          waitingForMessage(makeUserMsg(''));
+        }
+      },
+    };
+
+    // Notify caller that the handle is ready (before SDK query starts)
+    opts.onRunReady?.(handle);
+
+    // ── SDK query with async generator prompt ───────────────────────
     const q = query({
-      prompt: opts.prompt,
+      prompt: messageGenerator() as any,
       options: {
         model: opts.model,
         systemPrompt: opts.systemPrompt,
@@ -373,31 +441,35 @@ export class ClaudeProvider implements Provider {
     let sessionId = '';
     let usage = { inputTokens: 0, outputTokens: 0, totalCostUsd: 0 };
 
-    for await (const msg of q) {
-      yield msg as ProviderMessage;
+    try {
+      for await (const msg of q) {
+        yield msg as ProviderMessage;
 
-      const m = msg as Record<string, unknown>;
-      if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
-        sessionId = m.session_id as string;
-      }
-      if (m.type === 'assistant' && m.message) {
-        const content = (m.message as any)?.content;
-        if (Array.isArray(content)) {
-          for (const b of content) {
-            if (b.type === 'text') result = b.text;
+        const m = msg as Record<string, unknown>;
+        if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
+          sessionId = m.session_id as string;
+        }
+        if (m.type === 'assistant' && m.message) {
+          const content = (m.message as any)?.content;
+          if (Array.isArray(content)) {
+            for (const b of content) {
+              if (b.type === 'text') result = b.text;
+            }
           }
         }
+        if (m.type === 'result') {
+          result = (m.result as string) || result;
+          sessionId = (m.session_id as string) || sessionId;
+          const u = m.usage as Record<string, number> | undefined;
+          usage = {
+            inputTokens: u?.input_tokens || 0,
+            outputTokens: u?.output_tokens || 0,
+            totalCostUsd: (m.total_cost_usd as number) || 0,
+          };
+        }
       }
-      if (m.type === 'result') {
-        result = (m.result as string) || result;
-        sessionId = (m.session_id as string) || sessionId;
-        const u = m.usage as Record<string, number> | undefined;
-        usage = {
-          inputTokens: u?.input_tokens || 0,
-          outputTokens: u?.output_tokens || 0,
-          totalCostUsd: (m.total_cost_usd as number) || 0,
-        };
-      }
+    } finally {
+      closed = true;
     }
 
     return { result, sessionId, usage };

@@ -95,7 +95,9 @@ export type RpcMethod =
   | 'fs.delete'
   | 'fs.rename'
   | 'fs.watch.start'
-  | 'fs.watch.stop';
+  | 'fs.watch.stop'
+  | 'agent.run_background'
+  | 'agent.background_runs';
 
 export type GatewayEventName =
   | 'agent.stream'
@@ -116,6 +118,7 @@ export type GatewayEventName =
   | 'session.update'
   | 'status.update'
   | 'board.update'
+  | 'background.status'
   | 'fs.change';
 
 export type GatewayContext = {

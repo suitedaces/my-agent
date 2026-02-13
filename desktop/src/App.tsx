@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
   MessageSquare, Radio, Zap, Brain, Settings2,
-  FolderOpen, Sparkles, LayoutGrid
+  FolderOpen, Sparkles, LayoutGrid, Loader2
 } from 'lucide-react';
 
 type NavTab = 'chat' | 'channels' | 'board' | 'automation' | 'skills' | 'memory' | 'settings';
@@ -166,6 +166,9 @@ export default function App() {
                     >
                       {item.icon}
                       {item.label}
+                      {item.id === 'chat' && gw.backgroundRuns.some(r => r.status === 'running') && (
+                        <Loader2 className="w-3 h-3 ml-auto animate-spin text-muted-foreground" />
+                      )}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-[10px]">{item.label}</TooltipContent>

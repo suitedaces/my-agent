@@ -14,6 +14,7 @@ import { SessionRegistry } from './session-registry.js';
 import { ChannelManager } from './channel-manager.js';
 import { SessionManager } from '../session/manager.js';
 import { streamAgent, type AgentResult } from '../agent.js';
+import type { RunHandle } from '../providers/types.js';
 import { startHeartbeatRunner, type HeartbeatRunner } from '../heartbeat/runner.js';
 import { startCronRunner, loadCronJobs, saveCronJobs, type CronRunner } from '../cron/scheduler.js';
 import { checkSkillEligibility, loadAllSkills, findSkillByName } from '../skills/loader.js';
@@ -228,6 +229,17 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
   const pendingMessages = new Map<string, InboundMessage[]>();
   // accumulated tool log per active run
   const toolLogs = new Map<string, { completed: ToolEntry[]; current: { name: string; inputJson: string; detail: string } | null; lastEditAt: number }>();
+  // active RunHandles for message injection into running agent sessions
+  const runHandles = new Map<string, RunHandle>();
+
+  // background runs state
+  type BackgroundRun = {
+    id: string; sessionKey: string; prompt: string;
+    startedAt: number; status: 'running' | 'completed' | 'error';
+    result?: string; error?: string;
+  };
+  const backgroundRuns = new Map<string, BackgroundRun>();
+
   // guard against overlapping WhatsApp login attempts
   let whatsappLoginInProgress = false;
 
@@ -361,13 +373,36 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
       sessionRegistry.incrementMessages(session.key);
 
-      // if agent is already running for this chat, queue the message
+      // if agent is already running for this chat, try injection first
       if (session.activeRun) {
+        const handle = runHandles.get(session.key);
+        if (handle?.active) {
+          // sanitize sender name and body for injection
+          const safeSender = (msg.senderName || msg.senderId).replace(/[<>"'&\n\r]/g, '_').slice(0, 50);
+          const safeBody = msg.body.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const mediaAttr = msg.mediaType ? ` media_type="${msg.mediaType}" media_path="${msg.mediaPath || ''}"` : '';
+          const channelPrompt = [
+            `<incoming_message channel="${msg.channel}" sender="${safeSender}" chat="${msg.chatId}"${mediaAttr}>`,
+            safeBody || (msg.mediaPath ? `[Attached: ${msg.mediaType || 'file'} at ${msg.mediaPath}]` : ''),
+            `</incoming_message>`,
+          ].join('\n');
+          handle.inject(channelPrompt);
+          broadcast({ event: 'agent.user_message', data: {
+            source: `${msg.channel}/${msg.chatId}`, sessionKey: session.key,
+            prompt: msg.body, injected: true, timestamp: Date.now(),
+          }});
+          const handler = getChannelHandler(msg.channel);
+          if (handler) {
+            try { await handler.send(msg.chatId, 'noted, working on it...'); } catch {}
+          }
+          return;
+        }
+
+        // fallback: queue in pendingMessages (non-injection case)
         const queue = pendingMessages.get(session.key) || [];
         queue.push(msg);
         pendingMessages.set(session.key, queue);
 
-        // notify user
         const handler = getChannelHandler(msg.channel);
         if (handler) {
           try { await handler.send(msg.chatId, 'got it, I\'ll get to this after I\'m done'); } catch {}
@@ -723,6 +758,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           canUseTool: makeCanUseTool(channel, messageMetadata?.chatId),
           abortController,
           messageMetadata,
+          onRunReady: (handle) => { runHandles.set(sessionKey, handle); },
         });
 
         let agentText = '';
@@ -988,6 +1024,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       } finally {
         activeAbortControllers.delete(sessionKey);
         activeRunChannels.delete(sessionKey);
+        runHandles.delete(sessionKey);
         sessionRegistry.setActiveRun(sessionKey, false);
         broadcast({ event: 'status.update', data: { activeRun: false, source, sessionKey } });
       }
@@ -1039,6 +1076,17 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           sessionRegistry.incrementMessages(session.key);
           fileSessionManager.setMetadata(session.sessionId, { channel: 'desktop', chatId: 'default', chatType: 'dm' });
 
+          // try injection into active run first
+          const handle = runHandles.get(sessionKey);
+          if (handle?.active) {
+            handle.inject(prompt);
+            broadcast({ event: 'agent.user_message', data: {
+              source: 'desktop/chat', sessionKey, prompt, injected: true, timestamp: Date.now(),
+            }});
+            return { id, result: { sessionKey, sessionId: session.sessionId, injected: true } };
+          }
+
+          // no active session — start new run
           handleAgentRun({
             prompt,
             sessionKey,
@@ -2101,6 +2149,37 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           saveConfig(config);
           broadcast({ event: 'config.update', data: { key: `security.paths.${target}`, value: { allowed, denied } } });
           return { id, result: { target, allowed, denied } };
+        }
+
+        case 'agent.run_background': {
+          const prompt = params?.prompt as string;
+          if (!prompt) return { id, error: 'prompt required' };
+
+          const bgId = randomUUID();
+          const sessionKey = `bg:${bgId}`;
+          const bgRun: BackgroundRun = {
+            id: bgId, sessionKey, prompt,
+            startedAt: Date.now(), status: 'running',
+          };
+          backgroundRuns.set(bgId, bgRun);
+          broadcast({ event: 'background.status', data: bgRun });
+
+          // fire and forget — runs on its own session key
+          handleAgentRun({ prompt, sessionKey, source: 'desktop/background' }).then(result => {
+            bgRun.status = 'completed';
+            bgRun.result = result?.result;
+            broadcast({ event: 'background.status', data: bgRun });
+          }).catch(err => {
+            bgRun.status = 'error';
+            bgRun.error = err instanceof Error ? err.message : String(err);
+            broadcast({ event: 'background.status', data: bgRun });
+          });
+
+          return { id, result: { backgroundRunId: bgId, sessionKey } };
+        }
+
+        case 'agent.background_runs': {
+          return { id, result: Array.from(backgroundRuns.values()) };
         }
 
         default:

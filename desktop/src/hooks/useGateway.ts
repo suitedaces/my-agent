@@ -149,6 +149,16 @@ export type ToolNotification = {
   timestamp: number;
 };
 
+export type BackgroundRun = {
+  id: string;
+  sessionKey: string;
+  prompt: string;
+  startedAt: number;
+  status: 'running' | 'completed' | 'error';
+  result?: string;
+  error?: string;
+};
+
 type RpcResponse = {
   id: number;
   result?: unknown;
@@ -298,6 +308,7 @@ export function useGateway(url = 'wss://localhost:18789') {
   const [telegramLinkError, setTelegramLinkError] = useState<string | null>(null);
   const [providerInfo, setProviderInfo] = useState<{ name: string; auth: { authenticated: boolean; method?: string; identity?: string; error?: string; model?: string; cliVersion?: string; permissionMode?: string } } | null>(null);
   const [boardVersion, setBoardVersion] = useState(0);
+  const [backgroundRuns, setBackgroundRuns] = useState<BackgroundRun[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const rpcIdRef = useRef(0);
@@ -333,7 +344,7 @@ export function useGateway(url = 'wss://localhost:18789') {
 
     switch (name) {
       case 'agent.user_message': {
-        const d = data as { source: string; sessionKey?: string; prompt: string; timestamp: number };
+        const d = data as { source: string; sessionKey?: string; prompt: string; injected?: boolean; timestamp: number };
         if (d.sessionKey && d.sessionKey !== activeSessionKeyRef.current) break;
         // desktop/chat already adds user item in sendMessage, skip to avoid dupes
         if (d.source !== 'desktop/chat') {
@@ -342,7 +353,7 @@ export function useGateway(url = 'wss://localhost:18789') {
             content: d.prompt,
             timestamp: d.timestamp || Date.now(),
           }]);
-          setAgentStatus('thinking...');
+          setAgentStatus(prev => prev === 'idle' ? 'thinking...' : prev);
         }
         break;
       }
@@ -557,6 +568,20 @@ export function useGateway(url = 'wss://localhost:18789') {
         break;
       }
 
+      case 'background.status': {
+        const d = data as BackgroundRun;
+        setBackgroundRuns(prev => {
+          const idx = prev.findIndex(r => r.id === d.id);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = d;
+            return updated;
+          }
+          return [...prev, d];
+        });
+        break;
+      }
+
       case 'fs.change': {
         const d = data as { path: string; eventType: string; filename: string | null };
         // notify all listeners
@@ -731,7 +756,8 @@ export function useGateway(url = 'wss://localhost:18789') {
       content: prompt,
       timestamp: Date.now(),
     }]);
-    setAgentStatus('thinking...');
+    // don't override status if already running (injection case)
+    setAgentStatus(prev => prev === 'idle' ? 'thinking...' : prev);
     try {
       await rpc('chat.send', { prompt });
     } catch (err) {
@@ -991,6 +1017,16 @@ export function useGateway(url = 'wss://localhost:18789') {
     };
   }, [rpc]);
 
+  const runBackground = useCallback(async (prompt: string) => {
+    return await rpc('agent.run_background', { prompt }) as { backgroundRunId: string; sessionKey: string };
+  }, [rpc]);
+
+  const getBackgroundRuns = useCallback(async () => {
+    const runs = await rpc('agent.background_runs') as BackgroundRun[];
+    setBackgroundRuns(runs);
+    return runs;
+  }, [rpc]);
+
   const progress = useMemo<ProgressItem[]>(() => {
     for (let i = chatItems.length - 1; i >= 0; i--) {
       const item = chatItems[i];
@@ -1053,6 +1089,9 @@ export function useGateway(url = 'wss://localhost:18789') {
     telegramUnlink,
     providerInfo,
     boardVersion,
+    backgroundRuns,
+    runBackground,
+    getBackgroundRuns,
     getProviderStatus,
     setProvider,
     authWithApiKey,

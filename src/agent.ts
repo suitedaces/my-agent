@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { Config, SandboxSettings } from './config.js';
+import type { RunHandle } from './providers/types.js';
 import { getProvider } from './providers/index.js';
 
 function resolveSandbox(sandbox: SandboxSettings, channel?: string): SandboxSettings {
@@ -60,6 +61,7 @@ export type AgentOptions = {
   canUseTool?: (toolName: string, input: Record<string, unknown>, options: unknown) => Promise<unknown>;
   abortController?: AbortController;
   messageMetadata?: MessageMetadata;
+  onRunReady?: (handle: RunHandle) => void;
 };
 
 export type AgentResult = {
@@ -330,13 +332,14 @@ export async function* streamAgent(opts: AgentOptions): AsyncGenerator<unknown, 
     resumeId,
     cwd: config.cwd,
     env: cleanEnvForSdk(),
-    maxTurns: 50,
+    maxTurns: config.maxTurns ?? undefined,
     canUseTool: opts.canUseTool,
     abortController: opts.abortController,
     agents: agents as any,
     hooks: hooks as any,
     mcpServer: { 'dorabot-tools': mcpServer },
     sandbox: effectiveSandbox,
+    onRunReady: opts.onRunReady,
   });
 
   const messages: SessionMessage[] = [];
