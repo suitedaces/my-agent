@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { createServer as createTlsServer } from 'node:https';
 import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, renameSync, chmodSync, watch, type FSWatcher } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { resolve as pathResolve, join } from 'node:path';
+import { resolve as pathResolve, join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
 const resolve = (p: string) => pathResolve(p.startsWith('~') ? p.replace('~', homedir()) : p);
@@ -1798,6 +1798,139 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             const skillDir = resolve(join('~', '.dorabot', 'skills', name));
             rmSync(skillDir, { recursive: true, force: true });
             return { id, result: { deleted: name } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        // ── skills gallery RPCs ──────────────────────────────────
+        case 'skills.gallery.search': {
+          const query = params?.query as string;
+          if (!query) return { id, error: 'query required' };
+          const limit = (params?.limit as number) || 30;
+          try {
+            const url = `https://skills.sh/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+            const resp = await fetch(url);
+            if (!resp.ok) return { id, error: `skills.sh API error: ${resp.status}` };
+            const data = await resp.json() as { skills: Array<{ id: string; skillId: string; name: string; installs: number; source: string }>; count: number };
+            return { id, result: data };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'skills.gallery.featured': {
+          try {
+            const categories = [
+              { label: 'Development', query: 'development' },
+              { label: 'Testing', query: 'testing' },
+              { label: 'DevOps', query: 'deployment' },
+              { label: 'Security', query: 'security' },
+              { label: 'Documentation', query: 'documentation' },
+            ];
+            const results: Array<{ category: string; skills: Array<{ id: string; skillId: string; name: string; installs: number; source: string }> }> = [];
+            for (const cat of categories) {
+              try {
+                const url = `https://skills.sh/api/search?q=${encodeURIComponent(cat.query)}&limit=6`;
+                const resp = await fetch(url);
+                if (resp.ok) {
+                  const data = await resp.json() as { skills: Array<{ id: string; skillId: string; name: string; installs: number; source: string }> };
+                  results.push({ category: cat.label, skills: data.skills || [] });
+                }
+              } catch { /* skip failed category */ }
+            }
+            return { id, result: results };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'skills.gallery.detail': {
+          const source = params?.source as string;
+          const skillId = params?.skillId as string;
+          if (!source || !skillId) return { id, error: 'source and skillId required' };
+
+          try {
+            const pageUrl = `https://skills.sh/${source}/${skillId}`;
+            return { id, result: { source, skillId, pageUrl, installCmd: `npx skills add ${source} --skill ${skillId} -y` } };
+          } catch (err) {
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'skills.gallery.install': {
+          const source = params?.source as string;
+          const skillId = params?.skillId as string;
+          if (!source || !skillId) return { id, error: 'source and skillId required' };
+
+          const home = homedir();
+          const skillsDir = join(home, '.dorabot', 'skills');
+          const targetDir = join(skillsDir, skillId);
+
+          if (existsSync(targetDir)) {
+            return { id, error: `skill "${skillId}" is already installed` };
+          }
+
+          try {
+            const tmpDir = join(home, '.dorabot', '.gallery-tmp');
+            mkdirSync(tmpDir, { recursive: true });
+
+            execSync(
+              `npx -y skills add ${source} --skill ${skillId} -y 2>&1`,
+              { cwd: tmpDir, timeout: 120000, encoding: 'utf-8', stdio: 'pipe' }
+            );
+
+            const agentsPath = join(tmpDir, '.agents', 'skills', skillId);
+            const claudePath = join(tmpDir, '.claude', 'skills', skillId);
+
+            let installedPath: string | null = null;
+            if (existsSync(agentsPath) && statSync(agentsPath).isDirectory()) {
+              installedPath = agentsPath;
+            } else if (existsSync(claudePath)) {
+              const realPath = readFileSync(claudePath, 'utf-8');
+              if (existsSync(realPath)) installedPath = realPath;
+              else installedPath = claudePath;
+            }
+
+            if (!installedPath || !existsSync(join(installedPath, 'SKILL.md'))) {
+              try {
+                const findResult = execSync(`find ${tmpDir} -name "SKILL.md" -path "*/${skillId}/*" -maxdepth 6`, { encoding: 'utf-8', timeout: 5000 }).trim();
+                if (findResult) {
+                  const lines = findResult.split('\n');
+                  if (lines[0]) {
+                    installedPath = dirname(lines[0]);
+                  }
+                }
+              } catch { /* ignore find errors */ }
+            }
+
+            if (!installedPath || !existsSync(join(installedPath, 'SKILL.md'))) {
+              rmSync(tmpDir, { recursive: true, force: true });
+              return { id, error: `Failed to locate installed skill. The skill may have an unsupported structure.` };
+            }
+
+            mkdirSync(skillsDir, { recursive: true });
+            renameSync(installedPath, targetDir);
+            rmSync(tmpDir, { recursive: true, force: true });
+
+            return { id, result: { installed: skillId, path: targetDir } };
+          } catch (err) {
+            const tmpDir = join(home, '.dorabot', '.gallery-tmp');
+            try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+            return { id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        case 'skills.gallery.uninstall': {
+          const skillId = params?.skillId as string;
+          if (!skillId) return { id, error: 'skillId required' };
+          const skillDir = join(homedir(), '.dorabot', 'skills', skillId);
+          if (!existsSync(skillDir)) {
+            return { id, error: `skill "${skillId}" is not installed` };
+          }
+          try {
+            rmSync(skillDir, { recursive: true, force: true });
+            return { id, result: { uninstalled: skillId } };
           } catch (err) {
             return { id, error: err instanceof Error ? err.message : String(err) };
           }
