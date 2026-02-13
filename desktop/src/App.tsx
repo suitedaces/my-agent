@@ -142,7 +142,11 @@ export default function App() {
   // --- Keyboard shortcuts ---
   const shortcutActions = useMemo(() => ({
     newTab: () => tabState.newChatTab(),
-    closeTab: () => tabState.closeTab(tabState.activeTabId),
+    closeTab: () => {
+      const group = layout.groups.find(g => g.id === layout.activeGroupId);
+      const tabId = group?.activeTabId || tabState.activeTabId;
+      if (tabId) tabState.closeTab(tabId);
+    },
     nextTab: () => tabState.nextTab(),
     prevTab: () => tabState.prevTab(),
     focusTabByIndex: (i: number) => tabState.focusTabByIndex(i),
@@ -156,13 +160,12 @@ export default function App() {
     splitHorizontal: () => {
       const prevMode = layout.mode;
       layout.splitHorizontal();
-      // Create a new tab in the newly created group
       if (prevMode === 'single') {
         setTimeout(() => tabState.newChatTab('g1'), 0);
-      } else if (prevMode === '2-row') {
-        // 2-row → 2x2: g1 and g3 are new
+      } else if (prevMode !== '2x2') {
+        // Any 2-pane → 2x2: g2 and g3 are always empty
         setTimeout(() => {
-          tabState.newChatTab('g1');
+          tabState.newChatTab('g2');
           tabState.newChatTab('g3');
         }, 0);
       }
@@ -172,8 +175,8 @@ export default function App() {
       layout.splitVertical();
       if (prevMode === 'single') {
         setTimeout(() => tabState.newChatTab('g1'), 0);
-      } else if (prevMode === '2-col') {
-        // 2-col → 2x2: g2 and g3 are new
+      } else if (prevMode !== '2x2') {
+        // Any 2-pane → 2x2: g2 and g3 are always empty
         setTimeout(() => {
           tabState.newChatTab('g2');
           tabState.newChatTab('g3');

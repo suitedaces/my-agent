@@ -77,16 +77,16 @@ export function useLayout() {
   const splitHorizontal = useCallback(() => {
     setState(prev => {
       if (prev.mode === 'single') return { ...prev, mode: '2-col' as LayoutMode };
-      if (prev.mode === '2-row') return { ...prev, mode: '2x2' as LayoutMode };
-      return prev; // already 2-col or 2x2
+      if (prev.mode === '2x2') return prev;
+      return { ...prev, mode: '2x2' as LayoutMode }; // 2-col or 2-row → 2x2
     });
   }, []);
 
   const splitVertical = useCallback(() => {
     setState(prev => {
       if (prev.mode === 'single') return { ...prev, mode: '2-row' as LayoutMode };
-      if (prev.mode === '2-col') return { ...prev, mode: '2x2' as LayoutMode };
-      return prev; // already 2-row or 2x2
+      if (prev.mode === '2x2') return prev;
+      return { ...prev, mode: '2x2' as LayoutMode }; // 2-col or 2-row → 2x2
     });
   }, []);
 
