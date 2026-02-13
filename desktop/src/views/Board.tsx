@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import confetti from 'canvas-confetti';
 import type { useGateway } from '../hooks/useGateway';
 import {
   DndContext,
@@ -201,6 +202,18 @@ export function BoardView({ gateway }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
+  const fireConfetti = useCallback(() => {
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 },
+      colors: ['#f59e0b', '#ef4444', '#22c55e', '#a855f7', '#ec4899', '#f97316'],
+      ticks: 120,
+      gravity: 1.2,
+      scalar: 0.8,
+    });
+  }, []);
+
   const loadTasks = useCallback(async () => {
     if (gateway.connectionState !== 'connected') return;
     try {
@@ -265,6 +278,8 @@ export function BoardView({ gateway }: Props) {
 
     // optimistic update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as BoardTask['status'] } : t));
+
+    if (newStatus === 'approved') fireConfetti();
 
     try {
       await gateway.rpc('board.move', { id: taskId, status: newStatus });

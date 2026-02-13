@@ -16,6 +16,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@fortune-sheet/react": "^1.0.4",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "canvas-confetti": "^1.9.4",
     "jsonrepair": "^3.13.2",
     "lucide-react": "^0.563.0",
     "motion": "^12.33.0",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.1.18",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
