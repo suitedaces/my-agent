@@ -24,6 +24,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Plus, X, Trash2, LayoutGrid, ChevronRight, Ban, User, Bot } from 'lucide-react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type BoardTask = {
   id: string;
@@ -187,6 +189,7 @@ export function BoardView({ gateway }: Props) {
   const [showRejected, setShowRejected] = useState(false);
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [viewTask, setViewTask] = useState<BoardTask | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -384,7 +387,7 @@ export function BoardView({ gateway }: Props) {
               hoverColor={col.hoverColor}
               tasks={tasksByStatus(col.id)}
               onDelete={deleteTask}
-              onView={setViewTask}
+              onView={t => { setViewTask(t); setDetailOpen(true); }}
             />
           ))}
         </div>
@@ -435,8 +438,8 @@ export function BoardView({ gateway }: Props) {
       )}
 
       {/* task detail dialog */}
-      <Dialog open={!!viewTask} onOpenChange={open => { if (!open) setViewTask(null); }}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] !grid-rows-[auto_1fr_auto] overflow-hidden">
           {viewTask && (
             <>
               <DialogHeader>
@@ -463,40 +466,48 @@ export function BoardView({ gateway }: Props) {
                 </DialogDescription>
               </DialogHeader>
 
-              {viewTask.description && (
-                <>
-                  <Separator />
-                  <div className="text-xs text-foreground/80 whitespace-pre-wrap">{viewTask.description}</div>
-                </>
-              )}
+              <ScrollArea className="min-h-0">
+                <div className="space-y-3 pr-3">
+                  {viewTask.description && (
+                    <>
+                      <Separator />
+                      <div className="prose-chat text-xs">
+                        <Markdown remarkPlugins={[remarkGfm]}>{viewTask.description}</Markdown>
+                      </div>
+                    </>
+                  )}
 
-              {viewTask.result && (
-                <>
+                  {viewTask.result && (
+                    <>
+                      <Separator />
+                      <div>
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">result</div>
+                        <div className="prose-chat text-xs">
+                          <Markdown remarkPlugins={[remarkGfm]}>{viewTask.result}</Markdown>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   <Separator />
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">result</div>
-                    <div className="text-xs text-foreground/80 whitespace-pre-wrap">{viewTask.result}</div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                    <div>created: {new Date(viewTask.createdAt).toLocaleString()}</div>
+                    <div>updated: {new Date(viewTask.updatedAt).toLocaleString()}</div>
+                    {viewTask.completedAt && <div className="col-span-2">completed: {new Date(viewTask.completedAt).toLocaleString()}</div>}
                   </div>
-                </>
-              )}
+                </div>
+              </ScrollArea>
 
-              <Separator />
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-                <div>created: {new Date(viewTask.createdAt).toLocaleString()}</div>
-                <div>updated: {new Date(viewTask.updatedAt).toLocaleString()}</div>
-                {viewTask.completedAt && <div className="col-span-2">completed: {new Date(viewTask.completedAt).toLocaleString()}</div>}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs text-destructive hover:text-destructive"
-                  onClick={() => { deleteTask(viewTask.id); setViewTask(null); }}
+                  onClick={() => { deleteTask(viewTask.id); setDetailOpen(false); }}
                 >
                   <Trash2 className="w-3 h-3 mr-1" />delete
                 </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setViewTask(null)}>close</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setDetailOpen(false)}>close</Button>
               </div>
             </>
           )}
