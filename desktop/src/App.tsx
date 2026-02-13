@@ -51,6 +51,17 @@ export default function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
+  // Sync gateway active session whenever the focused group or its active tab changes
+  useEffect(() => {
+    const group = layout.groups.find(g => g.id === layout.activeGroupId);
+    if (group?.activeTabId) {
+      const tab = tabState.tabs.find(t => t.id === group.activeTabId);
+      if (tab && isChatTab(tab)) {
+        gw.setActiveSession(tab.sessionKey, tab.chatId);
+      }
+    }
+  }, [layout.activeGroupId, layout.groups, tabState.tabs, gw]);
+
   useEffect(() => {
     const fetchStars = () => {
       fetch('https://api.github.com/repos/suitedaces/dorabot')
