@@ -106,7 +106,7 @@ export function EditorGroupPanel({
             chatItems={ss.chatItems}
             agentStatus={ss.agentStatus}
             pendingQuestion={ss.pendingQuestion}
-            streamingQuestion={gateway.streamingQuestion}
+            sessionKey={activeTab.sessionKey}
             onNavigateSettings={onNavigateSettings}
           />
         );

@@ -154,6 +154,30 @@ export function useTabs(gw: ReturnType<typeof useGateway>, layout: ReturnType<ty
     localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTabId);
   }, [activeTabId]);
 
+  // Reactively fill empty visible groups with new tabs (handles splits)
+  // Runs after render with fresh state — no stale closure issues
+  useEffect(() => {
+    if (!layout.isMultiPane) return;
+    const emptyGroups = layout.visibleGroups.filter(g => g.tabIds.length === 0);
+    if (emptyGroups.length === 0) return;
+
+    const newTabs: ChatTab[] = [];
+    for (const group of emptyGroups) {
+      const { sessionKey, chatId } = gw.newSession();
+      const tab: ChatTab = {
+        id: `chat:${chatId}`,
+        type: 'chat',
+        label: 'new task',
+        closable: true,
+        sessionKey,
+        chatId,
+      };
+      newTabs.push(tab);
+      layout.addTabToGroup(tab.id, group.id);
+    }
+    setTabs(prev => [...prev, ...newTabs]);
+  }, [layout.visibleGroups, layout.isMultiPane, layout.addTabToGroup, gw]);
+
   // Derive activeTab from the active group's activeTabId
   const activeGroup = layout.groups.find(g => g.id === layout.activeGroupId) || layout.groups[0];
   const activeTab = tabs.find(t => t.id === (activeGroup.activeTabId || activeTabId)) || tabs[0];
@@ -192,59 +216,66 @@ export function useTabs(gw: ReturnType<typeof useGateway>, layout: ReturnType<ty
   }, [tabs, gw, layout]);
 
   const closeTab = useCallback((tabId: string) => {
-    // Remove from layout group
+    // Remove from layout group (reads current state, queues layout update)
     const { groupId, neighborTabId } = layout.removeTabFromGroup(tabId);
 
+    // Untrack from gateway
+    const closing = tabs.find(t => t.id === tabId);
+    if (closing && isChatTab(closing)) {
+      gw.untrackSession(closing.sessionKey);
+    }
+
+    // Remove from tabs array
     setTabs(prev => {
-      const idx = prev.findIndex(t => t.id === tabId);
-      if (idx < 0) return prev;
-
-      const closing = prev[idx];
-      if (isChatTab(closing)) {
-        gw.untrackSession(closing.sessionKey);
-      }
-
       const next = prev.filter(t => t.id !== tabId);
+      if (next.length === 0) {
+        // Always keep at least one tab
+        const newTab = makeDefaultChatTab();
+        gw.trackSession(newTab.sessionKey);
+        gw.setActiveSession(newTab.sessionKey, newTab.chatId);
+        setActiveTabId(newTab.id);
+        layout.addTabToGroup(newTab.id, 'g0');
+        return [newTab];
+      }
+      return next;
+    });
 
-      // If no tabs left in this group
-      if (!neighborTabId) {
-        if (layout.isMultiPane) {
-          // Collapse the empty group — downgrade layout mode
-          layout.collapseGroup(groupId);
-          // Focus a tab in a remaining group
-          const remaining = layout.groups.find(g => g.id !== groupId && g.tabIds.length > 0);
-          if (remaining?.activeTabId) {
-            const remTab = next.find(t => t.id === remaining.activeTabId);
-            if (remTab) {
-              setActiveTabId(remTab.id);
-              if (isChatTab(remTab)) gw.setActiveSession(remTab.sessionKey, remTab.chatId);
-            }
+    // Handle focus and layout after close
+    if (!neighborTabId) {
+      if (layout.isMultiPane) {
+        // Collapse empty group — called outside setTabs so collapseGroup's
+        // setState(prev => ...) sees the tab already removed by removeTabFromGroup
+        layout.collapseGroup(groupId);
+        // Focus a tab in a remaining group
+        const remaining = layout.groups.find(g => g.id !== groupId && g.tabIds.length > 0);
+        if (remaining?.activeTabId) {
+          const remTab = tabs.find(t => t.id === remaining.activeTabId);
+          if (remTab) {
+            setActiveTabId(remTab.id);
+            layout.focusGroup(remaining.id);
+            if (isChatTab(remTab)) gw.setActiveSession(remTab.sessionKey, remTab.chatId);
           }
-          return next;
         }
-        // Single pane — create a new default tab
+      } else {
+        // Single pane: create a new default tab in the same group
         const newTab = makeDefaultChatTab();
         gw.trackSession(newTab.sessionKey);
         gw.setActiveSession(newTab.sessionKey, newTab.chatId);
         setActiveTabId(newTab.id);
         layout.addTabToGroup(newTab.id, groupId);
-        return [...next, newTab];
+        setTabs(prev => [...prev, newTab]);
       }
-
-      // Focus neighbor
-      if (tabId === activeTabId) {
-        const neighbor = next.find(t => t.id === neighborTabId);
-        if (neighbor) {
-          setActiveTabId(neighbor.id);
-          if (isChatTab(neighbor)) {
-            gw.setActiveSession(neighbor.sessionKey, neighbor.chatId);
-          }
+    } else if (tabId === activeTabId) {
+      // Focus neighbor tab
+      const neighbor = tabs.find(t => t.id === neighborTabId);
+      if (neighbor) {
+        setActiveTabId(neighbor.id);
+        if (isChatTab(neighbor)) {
+          gw.setActiveSession(neighbor.sessionKey, neighbor.chatId);
         }
       }
-
-      return next;
-    });
-  }, [activeTabId, gw, layout]);
+    }
+  }, [activeTabId, tabs, gw, layout]);
 
   const openChatTab = useCallback((opts: {
     sessionId?: string;

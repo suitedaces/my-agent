@@ -1052,10 +1052,10 @@ export function useGateway(url = 'wss://localhost:18789') {
     await loadSessionIntoMap(sessionId, sk, cid);
   }, [loadSessionIntoMap]);
 
-  const answerQuestion = useCallback(async (requestId: string, answers: Record<string, string>) => {
+  const answerQuestion = useCallback(async (requestId: string, answers: Record<string, string>, sessionKey?: string) => {
     try {
       await rpc('chat.answerQuestion', { requestId, answers });
-      const sk = activeSessionKeyRef.current;
+      const sk = sessionKey || activeSessionKeyRef.current;
       setSessionStates(prev => {
         const state = prev[sk];
         if (!state) return prev;
@@ -1066,8 +1066,8 @@ export function useGateway(url = 'wss://localhost:18789') {
     }
   }, [rpc]);
 
-  const dismissQuestion = useCallback(() => {
-    const sk = activeSessionKeyRef.current;
+  const dismissQuestion = useCallback((sessionKey?: string) => {
+    const sk = sessionKey || activeSessionKeyRef.current;
     setSessionStates(prev => {
       const state = prev[sk];
       if (!state) return prev;

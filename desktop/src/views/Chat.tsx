@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { useGateway, ChatItem, AskUserQuestion } from '../hooks/useGateway';
@@ -29,7 +29,7 @@ type Props = {
   chatItems: ChatItem[];
   agentStatus: string;
   pendingQuestion: AskUserQuestion | null;
-  streamingQuestion: AskUserQuestion['questions'] | null;
+  sessionKey?: string;
   onNavigateSettings?: () => void;
 };
 
@@ -450,7 +450,7 @@ function getGreeting(): string {
   return 'good evening';
 }
 
-export function ChatView({ gateway, chatItems, agentStatus, pendingQuestion, streamingQuestion, onNavigateSettings }: Props) {
+export function ChatView({ gateway, chatItems, agentStatus, pendingQuestion, sessionKey, onNavigateSettings }: Props) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -458,6 +458,25 @@ export function ChatView({ gateway, chatItems, agentStatus, pendingQuestion, str
   const landingInputRef = useRef<HTMLTextAreaElement>(null);
   const isRunning = agentStatus !== 'idle';
   const isEmpty = chatItems.length === 0;
+
+  // Derive streamingQuestion from this session's chatItems (not the global active session)
+  const streamingQuestion = useMemo<AskUserQuestion['questions'] | null>(() => {
+    for (let i = chatItems.length - 1; i >= 0; i--) {
+      const item = chatItems[i];
+      if (item.type === 'tool_use' && item.name === 'AskUserQuestion' && item.streaming) {
+        const parsed = safeParse(item.input);
+        const qs = parsed.questions;
+        return Array.isArray(qs) && qs.length > 0 ? qs : null;
+      }
+    }
+    return null;
+  }, [chatItems]);
+
+  // Filter approvals to this session only (avoid showing other panes' approvals)
+  const sessionApprovals = useMemo(() => {
+    if (!sessionKey) return gateway.pendingApprovals;
+    return gateway.pendingApprovals.filter(a => !a.sessionKey || a.sessionKey === sessionKey);
+  }, [gateway.pendingApprovals, sessionKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -641,8 +660,8 @@ export function ChatView({ gateway, chatItems, agentStatus, pendingQuestion, str
       {pendingQuestion ? (
         <AskUserQuestionPanel
           question={pendingQuestion}
-          onAnswer={gateway.answerQuestion}
-          onDismiss={gateway.dismissQuestion}
+          onAnswer={(requestId, answers) => gateway.answerQuestion(requestId, answers, sessionKey)}
+          onDismiss={() => gateway.dismissQuestion(sessionKey)}
         />
       ) : streamingQuestion ? (
         <AskUserQuestionPanel
@@ -654,9 +673,9 @@ export function ChatView({ gateway, chatItems, agentStatus, pendingQuestion, str
       ) : null}
 
       {/* approval cards */}
-      {gateway.pendingApprovals.length > 0 && (
+      {sessionApprovals.length > 0 && (
         <div className="px-4 pt-2 shrink-0 space-y-2">
-          {gateway.pendingApprovals.map(a => (
+          {sessionApprovals.map(a => (
             <ApprovalUI
               key={a.requestId}
               requestId={a.requestId}
@@ -691,7 +710,7 @@ export function ChatView({ gateway, chatItems, agentStatus, pendingQuestion, str
                 size="sm"
                 variant="destructive"
                 className="h-8 w-8 p-0 rounded-lg"
-                onClick={gateway.abortAgent}
+                onClick={() => gateway.abortAgent(sessionKey)}
               >
                 <Square className="w-3.5 h-3.5" />
               </Button>

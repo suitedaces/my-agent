@@ -170,32 +170,8 @@ export default function App() {
       }
     },
     abortAgent: () => gw.abortAgent(),
-    splitHorizontal: () => {
-      const prevMode = layout.mode;
-      layout.splitHorizontal();
-      if (prevMode === 'single') {
-        setTimeout(() => tabState.newChatTab('g1'), 0);
-      } else if (prevMode !== '2x2') {
-        // Any 2-pane → 2x2: g2 and g3 are always empty
-        setTimeout(() => {
-          tabState.newChatTab('g2');
-          tabState.newChatTab('g3');
-        }, 0);
-      }
-    },
-    splitVertical: () => {
-      const prevMode = layout.mode;
-      layout.splitVertical();
-      if (prevMode === 'single') {
-        setTimeout(() => tabState.newChatTab('g1'), 0);
-      } else if (prevMode !== '2x2') {
-        // Any 2-pane → 2x2: g2 and g3 are always empty
-        setTimeout(() => {
-          tabState.newChatTab('g2');
-          tabState.newChatTab('g3');
-        }, 0);
-      }
-    },
+    splitHorizontal: () => layout.splitHorizontal(),
+    splitVertical: () => layout.splitVertical(),
     splitGrid: () => layout.splitGrid(),
     resetLayout: () => layout.resetToSingle(),
     focusGroupLeft: () => layout.focusGroupDirection('left'),
