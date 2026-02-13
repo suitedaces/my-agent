@@ -85,8 +85,8 @@ export function useKeyboardShortcuts(actions: ShortcutActions) {
         return;
       }
 
-      // Cmd+K — focus chat input
-      if (e.key === 'k' && !e.shiftKey) {
+      // Cmd+L — focus chat input
+      if (e.key === 'l' && !e.shiftKey) {
         e.preventDefault();
         actions.focusInput();
         return;
