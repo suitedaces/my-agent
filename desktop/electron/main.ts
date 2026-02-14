@@ -1,10 +1,12 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, session } from 'electron';
 import { is } from '@electron-toolkit/utils';
 import * as path from 'path';
+import { GatewayManager } from './gateway-manager';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let gatewayManager: GatewayManager | null = null;
 
 function getIconPath(): string {
   return is.dev
@@ -29,15 +31,11 @@ function createWindow(): void {
     },
   });
 
-  // Intercept Cmd+W and re-dispatch to renderer so it closes a tab instead of the window
+  // Intercept Cmd+W: prevent window close, tell renderer to close a tab instead
   mainWindow.webContents.on('before-input-event', (event, input) => {
-    if ((input.meta || input.control) && input.key.toLowerCase() === 'w') {
+    if ((input.meta || input.control) && input.key.toLowerCase() === 'w' && !input.shift) {
       event.preventDefault();
-      mainWindow?.webContents.sendInputEvent({
-        type: 'keyDown',
-        keyCode: 'w',
-        modifiers: input.meta ? ['meta'] : ['control'],
-      });
+      mainWindow?.webContents.send('close-tab');
     }
   });
 
@@ -112,7 +110,7 @@ app.on('certificate-error', (event, _webContents, url, _error, _cert, callback) 
   }
 });
 
-app.on('ready', () => {
+app.on('ready', async () => {
   // Accept self-signed gateway cert for localhost WebSocket connections
   session.defaultSession.setCertificateVerifyProc((request, callback) => {
     if (request.hostname === 'localhost' || request.hostname === '127.0.0.1') {
@@ -125,7 +123,34 @@ app.on('ready', () => {
   if (app.dock) {
     app.dock.setIcon(getIconPath());
   }
+
+  // Start gateway server before creating UI
+  gatewayManager = new GatewayManager({
+    onReady: () => {
+      console.log('[main] Gateway ready');
+      updateTrayTitle('online');
+    },
+    onError: (error) => {
+      console.error('[main] Gateway error:', error);
+      updateTrayTitle('error');
+    },
+    onExit: (code) => {
+      console.log('[main] Gateway exited:', code);
+      if (!isQuitting) {
+        updateTrayTitle('offline');
+      }
+    },
+  });
+
+  updateTrayTitle('starting...');
   createTray();
+
+  // Start gateway (non-blocking - UI will show and connect when ready)
+  gatewayManager.start().catch((err) => {
+    console.error('[main] Gateway start failed:', err);
+    updateTrayTitle('error');
+  });
+
   createWindow();
 });
 
@@ -141,4 +166,5 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  gatewayManager?.stop();
 });

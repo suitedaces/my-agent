@@ -1,4 +1,4 @@
-import { contextBridge, shell } from 'electron';
+import { contextBridge, shell, ipcRenderer } from 'electron';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -20,6 +20,10 @@ const electronAPI = {
     return gatewayToken;
   },
   openExternal: (url: string) => shell.openExternal(url),
+  onCloseTab: (cb: () => void) => {
+    ipcRenderer.on('close-tab', cb);
+    return () => { ipcRenderer.removeListener('close-tab', cb); };
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

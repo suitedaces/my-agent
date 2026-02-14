@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
   MessageSquare, Radio, Zap, Brain, Settings2,
-  FolderOpen, Sparkles, LayoutGrid, Loader2, Star,
+  Sparkles, LayoutGrid, Loader2, Star,
   Sun, Moon
 } from 'lucide-react';
 
@@ -205,6 +205,14 @@ export default function App() {
 
   useKeyboardShortcuts(shortcutActions);
 
+  // Cmd+W via Electron IPC (before-input-event blocks DOM keydown, so main process sends IPC instead)
+  useEffect(() => {
+    const cleanup = (window as any).electronAPI?.onCloseTab?.(() => {
+      shortcutActions.closeTab();
+    });
+    return () => cleanup?.();
+  }, [shortcutActions]);
+
   // --- Drag and drop ---
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const tabId = event.active.data.current?.tabId as string | undefined;
@@ -291,8 +299,8 @@ export default function App() {
   }, [layout, tabState]);
 
   const channelIcon = (ch?: string) => {
-    if (ch === 'whatsapp') return <img src="/whatsapp.png" className="w-3 h-3" alt="W" />;
-    if (ch === 'telegram') return <img src="/telegram.png" className="w-3 h-3" alt="T" />;
+    if (ch === 'whatsapp') return <img src="./whatsapp.png" className="w-3 h-3" alt="W" />;
+    if (ch === 'telegram') return <img src="./telegram.png" className="w-3 h-3" alt="T" />;
     return <MessageSquare className="w-3 h-3 opacity-50" />;
   };
 
@@ -470,7 +478,7 @@ export default function App() {
 
       {/* titlebar — pure drag chrome */}
       <div className="h-11 bg-card glass border-b border-border flex items-center pl-[78px] pr-4 shrink-0" style={{ WebkitAppRegion: 'drag' } as any}>
-        <img src="/dorabot.png" alt="dorabot" className="w-10 h-10 mr-1 dorabot-alive" />
+        <img src="./dorabot.png" alt="dorabot" className="w-10 h-10 mr-1 dorabot-alive" />
         <span className="text-base text-muted-foreground font-medium">dorabot</span>
         <a
           href="https://github.com/suitedaces/dorabot"
@@ -528,14 +536,6 @@ export default function App() {
                 </Tooltip>
               ))}
 
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2.5 pt-4 pb-1">tools</div>
-              <button
-                className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
-                onClick={() => setShowFiles(f => !f)}
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                Files {showFiles ? '(on)' : '(off)'}
-              </button>
             </div>
 
             {/* sessions */}
