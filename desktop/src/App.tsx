@@ -43,6 +43,7 @@ export default function App() {
   const [selectedChannel, setSelectedChannel] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const onboardingCheckedRef = useRef(false);
+  const focusInputOnGroupSwitch = useRef(false);
   const gw = useGateway();
   const layout = useLayout();
   const tabState = useTabs(gw, layout);
@@ -62,6 +63,14 @@ export default function App() {
       if (tab && isChatTab(tab)) {
         gw.setActiveSession(tab.sessionKey, tab.chatId);
       }
+    }
+    // Auto-focus chat input after keyboard-triggered group switch
+    if (focusInputOnGroupSwitch.current) {
+      focusInputOnGroupSwitch.current = false;
+      const groupEl = document.querySelector<HTMLElement>(`[data-group-id="${layout.activeGroupId}"]`);
+      const ta = groupEl?.querySelector<HTMLTextAreaElement>('.chat-input-area textarea')
+        || document.querySelector<HTMLTextAreaElement>('.chat-input-area textarea');
+      ta?.focus();
     }
   }, [layout.activeGroupId, layout.groups, tabState.tabs, gw]);
 
@@ -188,10 +197,10 @@ export default function App() {
     splitVertical: () => layout.splitVertical(),
     splitGrid: () => layout.splitGrid(),
     resetLayout: () => layout.resetToSingle(),
-    focusGroupLeft: () => layout.focusGroupDirection('left'),
-    focusGroupRight: () => layout.focusGroupDirection('right'),
-    focusGroupUp: () => layout.focusGroupDirection('up'),
-    focusGroupDown: () => layout.focusGroupDirection('down'),
+    focusGroupLeft: () => { focusInputOnGroupSwitch.current = true; layout.focusGroupDirection('left'); },
+    focusGroupRight: () => { focusInputOnGroupSwitch.current = true; layout.focusGroupDirection('right'); },
+    focusGroupUp: () => { focusInputOnGroupSwitch.current = true; layout.focusGroupDirection('up'); },
+    focusGroupDown: () => { focusInputOnGroupSwitch.current = true; layout.focusGroupDirection('down'); },
   }), [tabState, gw, handleNavClick, layout]);
 
   useKeyboardShortcuts(shortcutActions);

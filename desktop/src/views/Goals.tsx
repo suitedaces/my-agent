@@ -76,7 +76,7 @@ function KanbanColumn({ id, label, tasks, onDelete, onView, bg, hoverColor }: {
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col flex-1 min-w-0 rounded-lg border border-border transition-colors',
+        'flex flex-col min-w-0 min-h-0 rounded-lg border border-border transition-colors',
         isOver ? hoverColor : bg,
       )}
     >
@@ -125,14 +125,14 @@ function KanbanCard({ task, onDelete, onView, overlay }: {
         }
       }}
       className={cn(
-        'group rounded-md border border-border bg-card p-2 text-xs transition-shadow cursor-grab active:cursor-grabbing',
+        'group rounded-md border border-border bg-card p-2 text-xs transition-shadow cursor-grab active:cursor-grabbing overflow-hidden',
         isDragging && 'opacity-30',
         overlay && 'shadow-lg border-primary/50 rotate-2',
       )}
     >
       <div className="flex items-start gap-1">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-[11px] leading-tight">{task.title}</div>
+          <div className="font-medium text-[11px] leading-tight break-words">{task.title}</div>
           {task.description && (
             <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{task.description}</div>
           )}
@@ -355,7 +355,7 @@ export function GoalsView({ gateway }: Props) {
                   className="text-xs"
                 />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col @sm:flex-row @sm:items-center gap-3">
                 <div className="space-y-1">
                   <Label className="text-[11px]">priority</Label>
                   <div className="flex gap-1">
@@ -392,7 +392,7 @@ export function GoalsView({ gateway }: Props) {
 
       {/* kanban columns */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 p-4 flex-1 min-h-0">
+        <div className="grid grid-cols-2 @xl:grid-cols-4 gap-3 p-4 flex-1 min-h-0 auto-rows-[1fr]">
           {COLUMNS.map(col => (
             <KanbanColumn
               key={col.id}
@@ -505,7 +505,7 @@ export function GoalsView({ gateway }: Props) {
                   )}
 
                   <Separator />
-                  <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                  <div className="grid grid-cols-1 @xs:grid-cols-2 gap-2 text-[10px] text-muted-foreground">
                     <div>created: {new Date(viewTask.createdAt).toLocaleString()}</div>
                     <div>updated: {new Date(viewTask.updatedAt).toLocaleString()}</div>
                     {viewTask.completedAt && <div className="col-span-2">completed: {new Date(viewTask.completedAt).toLocaleString()}</div>}

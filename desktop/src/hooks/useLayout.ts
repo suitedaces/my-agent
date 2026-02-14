@@ -255,9 +255,13 @@ export function useLayout() {
       groups[1].tabIds = mergedIds;
       groups[1].activeTabId = mergedActive;
 
-      const newActiveGroup = prev.activeGroupId === emptyGroupId ? 'g0' : prev.activeGroupId;
-      // Remap active group if it was g2/g3 (which don't exist in 2-pane mode)
-      const finalActiveGroup = ALL_GROUP_IDS.indexOf(newActiveGroup) > 1 ? 'g1' : (newActiveGroup as GroupId);
+      // Map activeGroupId to the destination group that received its tabs
+      let finalActiveGroup: GroupId = 'g0';
+      if (prev.activeGroupId !== emptyGroupId) {
+        const activeRemIdx = remaining.findIndex(g => g.id === prev.activeGroupId);
+        // remaining[0] → g0, remaining[1+] → merged into g1
+        if (activeRemIdx > 0) finalActiveGroup = 'g1';
+      }
 
       return { mode: newMode, groups, activeGroupId: finalActiveGroup };
     });

@@ -168,7 +168,7 @@ export function EditorGroupPanel({
           tabState.newChatTab(group.id);
         }}
       />
-      <div className="flex-1 min-h-0 min-w-0 relative">
+      <div className="@container flex-1 min-h-0 min-w-0 relative">
         {renderContent()}
         {isDragging && (
           <>

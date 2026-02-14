@@ -33,7 +33,7 @@ export function StatusView({ gateway }: Props) {
 
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-4">
-          <BentoGrid className="grid-cols-2 gap-3">
+          <BentoGrid className="gap-3">
             <BentoGridItem className="col-span-1">
               <Card>
                 <CardContent className="p-3">
@@ -137,7 +137,7 @@ export function StatusView({ gateway }: Props) {
             </BentoGridItem>
 
             {statusData && (
-              <BentoGridItem className="col-span-2">
+              <BentoGridItem className="@md:col-span-2">
                 <Card>
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2 mb-3">

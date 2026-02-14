@@ -235,16 +235,21 @@ export function useTabs(gw: ReturnType<typeof useGateway>, layout: ReturnType<ty
     // Handle focus and layout after close
     if (!neighborTabId) {
       if (layout.isMultiPane) {
-        // Collapse empty group — called outside setTabs so collapseGroup's
-        // setState(prev => ...) sees the tab already removed by removeTabFromGroup
+        // Compute focus target from pre-collapse state before it goes stale
+        // (layout.groups won't reflect collapseGroup's setState until next render)
+        const preCollapseRemaining = layout.groups.filter(g => g.id !== groupId && g.tabIds.length > 0);
+
+        // collapseGroup sets the correct activeGroupId — don't call focusGroup after
         layout.collapseGroup(groupId);
-        // Focus a tab in a remaining group
-        const remaining = layout.groups.find(g => g.id !== groupId && g.tabIds.length > 0);
-        if (remaining?.activeTabId) {
-          const remTab = tabs.find(t => t.id === remaining.activeTabId);
+
+        // Pick the tab to focus: keep current group's tab if it survived, otherwise first remaining
+        const focusTarget = layout.activeGroupId !== groupId
+          ? preCollapseRemaining.find(g => g.id === layout.activeGroupId) || preCollapseRemaining[0]
+          : preCollapseRemaining[0];
+        if (focusTarget?.activeTabId) {
+          const remTab = tabs.find(t => t.id === focusTarget.activeTabId);
           if (remTab) {
             setActiveTabId(remTab.id);
-            layout.focusGroup(remaining.id);
             if (isChatTab(remTab)) gw.setActiveSession(remTab.sessionKey, remTab.chatId);
           }
         }

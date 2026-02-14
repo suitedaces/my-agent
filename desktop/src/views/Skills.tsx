@@ -213,7 +213,7 @@ export function SkillsView({ gateway }: Props) {
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-8 w-32 ml-auto" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 @md:grid-cols-2 gap-3">
           {[1, 2, 3, 4].map(i => (
             <Skeleton key={i} className="h-32 w-full rounded-lg" />
           ))}
@@ -288,7 +288,7 @@ export function SkillsView({ gateway }: Props) {
             </div>
 
             {/* meta grid */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 @sm:grid-cols-2 gap-3">
               <MetaItem
                 icon={skill.eligibility.eligible ? CheckCircle2 : XCircle}
                 label="status"
@@ -424,7 +424,7 @@ export function SkillsView({ gateway }: Props) {
             {/* requirements section */}
             <div className="space-y-3">
               <SectionHeader>requirements</SectionHeader>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 @sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <Terminal className="w-3 h-3" />binaries
@@ -600,7 +600,7 @@ function SkillSection({ label, count, skills, onClickSkill, onEditSkill, onDelet
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
         <span className="text-[10px] text-muted-foreground">{count}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 @md:grid-cols-2 gap-2">
         {skills.map(skill => (
           <SkillCard
             key={skill.name}
