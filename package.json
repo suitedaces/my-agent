@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "(kill $(netstat -anv -p tcp 2>/dev/null | awk '/:18789 .* LISTEN/{print $9}') 2>/dev/null; trap 'kill 0' SIGINT; tsx watch src/index.ts -g & npm -C desktop run dev)",
-    "dev:gateway": "tsx watch src/index.ts -g",
+    "dev": "(kill $(netstat -anv -p tcp 2>/dev/null | awk '/:18789 .* LISTEN/{print $9}') 2>/dev/null; mkdir -p ~/.dorabot/logs; trap 'kill 0' SIGINT; tsx watch src/index.ts -g 2>&1 | tee ~/.dorabot/logs/gateway.log & npm -C desktop run dev)",
+    "dev:gateway": "mkdir -p ~/.dorabot/logs && tsx watch src/index.ts -g 2>&1 | tee ~/.dorabot/logs/gateway.log",
     "dev:cli": "tsx src/index.ts -i",
     "dev:desktop": "npm -C desktop run dev",
     "start": "node dist/index.js -g",

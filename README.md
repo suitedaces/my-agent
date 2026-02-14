@@ -3,9 +3,9 @@
 
   # dorabot
 
-  **Turn Claude Code and Codex into your personal AI agent.**
+  **Open-source personal AI agent.**
 
-  You already pay for these models. dorabot gives them arms and legs - messaging, browser automation, email, Mac control, scheduling, persistent memory - so they can do real work outside the IDE.
+  Your personal AI agent with persistent memory, multi-channel messaging (WhatsApp, Telegram, Slack), browser automation, email, Mac control, and a proactive goal system that proposes and ships work without being asked. Runs locally, bring your own model.
 
 </div>
 
