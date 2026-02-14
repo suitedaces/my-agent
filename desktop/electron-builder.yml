@@ -37,6 +37,10 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   gatekeeperAssess: false
+  extendInfo:
+    NSDesktopFolderUsageDescription: "dorabot needs access to your Desktop to read and manage files."
+    NSDocumentsFolderUsageDescription: "dorabot needs access to Documents to read and manage files."
+    NSDownloadsFolderUsageDescription: "dorabot needs access to Downloads to read and manage files."
 
 dmg:
   title: "${productName}"
@@ -49,5 +53,5 @@ dmg:
       type: link
       path: /Applications
 
-# Don't try to code sign if no identity is available
-afterSign: null
+# Ad-hoc sign so macOS persists TCC decisions across rebuilds
+identity: null
