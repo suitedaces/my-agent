@@ -183,7 +183,7 @@ function TelegramSetup({ gateway }: { gateway: ReturnType<typeof useGateway> }) 
         <CardContent className="p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img src="/telegram.png" className="w-3.5 h-3.5" alt="" />
+              <img src="./telegram.png" className="w-3.5 h-3.5" alt="" />
               <span className="text-xs font-semibold">Telegram linked</span>
               {botUsername && (
                 <span className="text-[11px] text-muted-foreground">{botUsername}</span>
@@ -223,7 +223,7 @@ function TelegramSetup({ gateway }: { gateway: ReturnType<typeof useGateway> }) 
       <CardContent className="p-4">
         <div className="flex flex-col gap-4 py-2">
           <div className="flex flex-col items-center gap-2">
-            <img src="/telegram.png" className="w-8 h-8 opacity-40" alt="" />
+            <img src="./telegram.png" className="w-8 h-8 opacity-40" alt="" />
             <div className="text-center space-y-1">
               <div className="text-sm font-semibold">set up Telegram</div>
               <div className="text-[10px] text-muted-foreground">
@@ -333,7 +333,7 @@ export function ChannelView({ channel, gateway, onViewSession, onSwitchChannel }
                 }`}
               >
                 <span className="flex items-center gap-1.5">
-                  <img src={ch === 'whatsapp' ? '/whatsapp.png' : '/telegram.png'} className="w-3.5 h-3.5" alt="" />
+                  <img src={ch === 'whatsapp' ? './whatsapp.png' : './telegram.png'} className="w-3.5 h-3.5" alt="" />
                   {ch === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
                 </span>
               </button>

@@ -153,7 +153,7 @@ function DetectingStep() {
     <div className="flex flex-col items-center gap-3 py-8">
       <div className="relative w-20 h-20 mx-auto">
         <div className="absolute inset-0 rounded-full bg-success/30 blur-xl animate-pulse" />
-        <img src="/dorabot-computer.png" alt="dorabot" className="relative w-20 h-20 dorabot-alive" />
+        <img src="./dorabot-computer.png" alt="dorabot" className="relative w-20 h-20 dorabot-alive" />
       </div>
       <Loader2 className="w-5 h-5 text-primary animate-spin" />
       <div className="text-[11px] text-muted-foreground">checking for existing login...</div>
@@ -209,7 +209,7 @@ function ChooseStep({
       <div className="text-center space-y-3">
         <div className="relative w-20 h-20 mx-auto">
           <div className="absolute inset-0 rounded-full bg-success/30 blur-xl animate-pulse" />
-          <img src="/dorabot-computer.png" alt="dorabot" className="relative w-20 h-20 dorabot-alive" />
+          <img src="./dorabot-computer.png" alt="dorabot" className="relative w-20 h-20 dorabot-alive" />
         </div>
         <div>
           <h1 className="text-base font-semibold text-foreground">welcome to dorabot</h1>
@@ -225,7 +225,7 @@ function ChooseStep({
           className="flex items-start gap-3 w-full px-4 py-3 rounded-xl border-2 border-border bg-card/80 backdrop-blur hover:border-primary/50 hover:bg-card transition-all text-left"
         >
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-            <img src="/claude-icon.svg" alt="Claude" className="w-5 h-5" />
+            <img src="./claude-icon.svg" alt="Claude" className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -243,7 +243,7 @@ function ChooseStep({
           className="flex items-start gap-3 w-full px-4 py-3 rounded-xl border-2 border-border bg-card/80 backdrop-blur hover:border-primary/50 hover:bg-card transition-all text-left"
         >
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-            <img src="/openai-icon.svg" alt="OpenAI" className="w-5 h-5" />
+            <img src="./openai-icon.svg" alt="OpenAI" className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -260,7 +260,7 @@ function ChooseStep({
           className="flex items-start gap-3 w-full px-4 py-3 rounded-xl border-2 border-border bg-card/80 backdrop-blur hover:border-primary/50 hover:bg-card transition-all text-left"
         >
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-            <img src="/openai-icon.svg" alt="OpenAI" className="w-5 h-5" />
+            <img src="./openai-icon.svg" alt="OpenAI" className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xs font-semibold text-foreground">OpenAI API Key</div>
@@ -372,7 +372,7 @@ function PermissionsStep({ onComplete }: { onComplete: () => void }) {
       <div className="text-center space-y-2">
         <div className="relative w-20 h-20 mx-auto">
           <div className="absolute inset-0 rounded-full bg-success/30 blur-xl animate-pulse" />
-          <img src="/dorabot-computer.png" alt="dorabot" className="relative w-20 h-20 dorabot-alive" />
+          <img src="./dorabot-computer.png" alt="dorabot" className="relative w-20 h-20 dorabot-alive" />
         </div>
         <div>
           <h1 className="text-base font-semibold text-foreground">one more thing</h1>

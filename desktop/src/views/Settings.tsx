@@ -320,7 +320,7 @@ function AnthropicCard({ gateway, disabled }: { gateway: ReturnType<typeof useGa
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4">
-          <img src="/claude-icon.svg" alt="Anthropic" className="w-4 h-4" />
+          <img src="./claude-icon.svg" alt="Anthropic" className="w-4 h-4" />
           <span className="text-xs font-semibold">Anthropic</span>
         </div>
 
@@ -443,7 +443,7 @@ function OpenAICard({ gateway, disabled }: { gateway: ReturnType<typeof useGatew
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4">
-          <img src="/openai-icon.svg" alt="OpenAI" className="w-4 h-4" />
+          <img src="./openai-icon.svg" alt="OpenAI" className="w-4 h-4" />
           <span className="text-xs font-semibold">OpenAI</span>
         </div>
 

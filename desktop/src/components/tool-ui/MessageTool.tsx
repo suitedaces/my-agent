@@ -11,7 +11,7 @@ export function MessageTool({ input, output, isError }: ToolUIProps) {
   const message = parsed.message || ""
   const action = parsed.action || "send"
 
-  const channelImg = channel === "whatsapp" ? "/whatsapp.png" : channel === "telegram" ? "/telegram.png" : null
+  const channelImg = channel === "whatsapp" ? "./whatsapp.png" : channel === "telegram" ? "./telegram.png" : null
 
   return (
     <div className="space-y-2">

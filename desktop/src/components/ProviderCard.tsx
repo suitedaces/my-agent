@@ -87,7 +87,7 @@ export function ProviderCard({ gateway, disabled }: Props) {
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4">
           <img
-            src={providerName === 'codex' ? '/openai-icon.svg' : '/claude-icon.svg'}
+            src={providerName === 'codex' ? './openai-icon.svg' : './claude-icon.svg'}
             alt={providerName}
             className="w-4 h-4"
           />
