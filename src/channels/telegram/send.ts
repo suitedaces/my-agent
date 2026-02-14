@@ -15,8 +15,37 @@ export function normalizeTelegramChatId(target: string): number | string {
   return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
 }
 
+// check if a split point is inside an unclosed HTML tag
+function isInsideTag(text: string, pos: number): boolean {
+  const before = text.slice(0, pos);
+  const lastOpen = before.lastIndexOf('<');
+  if (lastOpen < 0) return false;
+  const lastClose = before.lastIndexOf('>', lastOpen);
+  return lastClose < lastOpen; // < found after last >, means we're inside a tag
+}
+
+// find unclosed block tags (pre, blockquote, code) at a split point
+function getUnclosedTags(text: string): string[] {
+  const stack: string[] = [];
+  const re = /<(\/?)(\w+)(?:\s[^>]*)?>/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const [, closing, tag] = m;
+    const t = tag.toLowerCase();
+    if (t === 'pre' || t === 'blockquote' || t === 'code') {
+      if (closing) {
+        const idx = stack.lastIndexOf(t);
+        if (idx >= 0) stack.splice(idx, 1);
+      } else {
+        stack.push(t);
+      }
+    }
+  }
+  return stack;
+}
+
 // split long text into chunks that respect paragraph/line/sentence boundaries
-// avoids splitting inside <pre> or <blockquote> tags
+// avoids splitting inside <pre>, <code>, or <blockquote> tags
 export function splitTelegramMessage(text: string, limit = MSG_LIMIT): string[] {
   if (text.length <= limit) return [text];
 
@@ -28,29 +57,40 @@ export function splitTelegramMessage(text: string, limit = MSG_LIMIT): string[] 
 
     // try paragraph break
     const paraIdx = remaining.lastIndexOf('\n\n', limit);
-    if (paraIdx > limit * 0.3) {
-      splitAt = paraIdx;
+    if (paraIdx > limit * 0.3 && !isInsideTag(remaining, paraIdx)) {
+      const unclosed = getUnclosedTags(remaining.slice(0, paraIdx));
+      if (unclosed.length === 0) splitAt = paraIdx;
     }
 
     // try line break
     if (splitAt < 0) {
       const lineIdx = remaining.lastIndexOf('\n', limit);
-      if (lineIdx > limit * 0.3) {
-        splitAt = lineIdx;
+      if (lineIdx > limit * 0.3 && !isInsideTag(remaining, lineIdx)) {
+        const unclosed = getUnclosedTags(remaining.slice(0, lineIdx));
+        if (unclosed.length === 0) splitAt = lineIdx;
       }
     }
 
     // try sentence break
     if (splitAt < 0) {
       const sentIdx = remaining.lastIndexOf('. ', limit);
-      if (sentIdx > limit * 0.3) {
-        splitAt = sentIdx + 1;
+      if (sentIdx > limit * 0.3 && !isInsideTag(remaining, sentIdx)) {
+        const unclosed = getUnclosedTags(remaining.slice(0, sentIdx));
+        if (unclosed.length === 0) splitAt = sentIdx + 1;
       }
     }
 
-    // hard split as last resort
+    // fallback: close unclosed tags at limit, reopen in next chunk
     if (splitAt < 0) {
       splitAt = limit;
+      const unclosed = getUnclosedTags(remaining.slice(0, splitAt));
+      if (unclosed.length > 0) {
+        const closeTags = unclosed.reverse().map(t => `</${t}>`).join('');
+        const openTags = unclosed.reverse().map(t => `<${t}>`).join('');
+        chunks.push(remaining.slice(0, splitAt).trimEnd() + closeTags);
+        remaining = openTags + remaining.slice(splitAt).trimStart();
+        continue;
+      }
     }
 
     chunks.push(remaining.slice(0, splitAt).trimEnd());
@@ -113,15 +153,40 @@ export async function sendTelegramMessage(
   const html = markdownToTelegramHtml(text);
   const chunks = splitTelegramMessage(html);
 
-  // send first chunk (with reply-to if any)
-  const result = await api.sendMessage(chatId, chunks[0], {
-    parse_mode: 'HTML',
-    reply_parameters: opts?.replyTo ? { message_id: opts.replyTo } : undefined,
-  });
+  // send first chunk (with reply-to if any), fall back to plain text on HTML parse error
+  let result;
+  try {
+    result = await api.sendMessage(chatId, chunks[0], {
+      parse_mode: 'HTML',
+      reply_parameters: opts?.replyTo ? { message_id: opts.replyTo } : undefined,
+    });
+  } catch (err: any) {
+    if (err?.description?.includes("can't parse")) {
+      console.warn('[telegram] HTML parse failed, falling back to plain text');
+      const plainChunks = splitTelegramMessage(text);
+      result = await api.sendMessage(chatId, plainChunks[0], {
+        reply_parameters: opts?.replyTo ? { message_id: opts.replyTo } : undefined,
+      });
+      for (let i = 1; i < plainChunks.length; i++) {
+        await api.sendMessage(chatId, plainChunks[i]);
+      }
+      return { id: String(result.message_id), chatId: String(result.chat.id) };
+    }
+    throw err;
+  }
 
   // send remaining chunks sequentially
   for (let i = 1; i < chunks.length; i++) {
-    await api.sendMessage(chatId, chunks[i], { parse_mode: 'HTML' });
+    try {
+      await api.sendMessage(chatId, chunks[i], { parse_mode: 'HTML' });
+    } catch (err: any) {
+      if (err?.description?.includes("can't parse")) {
+        console.warn(`[telegram] HTML parse failed on chunk ${i}, sending plain`);
+        await api.sendMessage(chatId, chunks[i].replace(/<[^>]+>/g, ''));
+      } else {
+        throw err;
+      }
+    }
   }
 
   return {
@@ -141,11 +206,28 @@ export async function editTelegramMessage(
   const chunks = splitTelegramMessage(html);
 
   // edit the original message with the first chunk
-  await api.editMessageText(cid, Number(messageId), chunks[0], { parse_mode: 'HTML' });
+  try {
+    await api.editMessageText(cid, Number(messageId), chunks[0], { parse_mode: 'HTML' });
+  } catch (err: any) {
+    if (err?.description?.includes("can't parse")) {
+      console.warn('[telegram] HTML parse failed on edit, falling back to plain text');
+      await api.editMessageText(cid, Number(messageId), newText.slice(0, MSG_LIMIT));
+      return;
+    }
+    throw err;
+  }
 
   // overflow chunks sent as new messages
   for (let i = 1; i < chunks.length; i++) {
-    await api.sendMessage(cid, chunks[i], { parse_mode: 'HTML' });
+    try {
+      await api.sendMessage(cid, chunks[i], { parse_mode: 'HTML' });
+    } catch (err: any) {
+      if (err?.description?.includes("can't parse")) {
+        await api.sendMessage(cid, chunks[i].replace(/<[^>]+>/g, ''));
+      } else {
+        throw err;
+      }
+    }
   }
 }
 

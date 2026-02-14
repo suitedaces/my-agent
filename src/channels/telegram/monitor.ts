@@ -171,7 +171,11 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
     if (!access) return;
 
     const inbound = buildInbound(ctx.message, access.isGroup, ctx.message.text);
-    await opts.onMessage!(inbound);
+    try {
+      await opts.onMessage!(inbound);
+    } catch (err) {
+      console.error('[telegram] onMessage error:', err);
+    }
   });
 
   // handle incoming media messages (photo, video, audio, document, voice, animation, video_note)
@@ -221,13 +225,20 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
         const inbound = buildInbound(msg, access.isGroup, caption);
         inbound.mediaPath = path;
         inbound.mediaType = mimeType;
-        await opts.onMessage!(inbound);
+        try {
+          await opts.onMessage!(inbound);
+        } catch (err) {
+          console.error(`[telegram] onMessage error (${mediaType}):`, err);
+        }
       } catch (err) {
         console.error(`[telegram] failed to download ${mediaType}:`, err);
-        // still forward the message with caption if download fails
         if (caption) {
           const inbound = buildInbound(msg, access.isGroup, caption);
-          await opts.onMessage!(inbound);
+          try {
+            await opts.onMessage!(inbound);
+          } catch (err2) {
+            console.error(`[telegram] onMessage error (${mediaType} fallback):`, err2);
+          }
         }
       }
     });

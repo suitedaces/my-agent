@@ -30,14 +30,19 @@ export function markdownToTelegramHtml(text: string): string {
     return `\x00IC${idx}\x00`;
   });
 
+  // protect markdown links before escaping (so URLs with & don't get mangled)
+  const links: string[] = [];
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
+    const idx = links.length;
+    links.push(`<a href="${url}">${escapeHtml(text)}</a>`);
+    return `\x00LK${idx}\x00`;
+  });
+
   // escape HTML entities in remaining text
   result = escapeHtml(result);
 
   // spoiler ||text||
   result = result.replace(/\|\|(.+?)\|\|/g, '<tg-spoiler>$1</tg-spoiler>');
-
-  // markdown links [text](url)
-  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
   // bold **text** or __text__
   result = result.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
@@ -64,6 +69,7 @@ export function markdownToTelegramHtml(text: string): string {
   // restore protected blocks
   result = result.replace(/\x00CB(\d+)\x00/g, (_, idx) => codeBlocks[Number(idx)]);
   result = result.replace(/\x00IC(\d+)\x00/g, (_, idx) => inlineCodes[Number(idx)]);
+  result = result.replace(/\x00LK(\d+)\x00/g, (_, idx) => links[Number(idx)]);
   result = result.replace(/\x00HT(\d+)\x00/g, (_, idx) => htmlTags[Number(idx)]);
 
   return result;

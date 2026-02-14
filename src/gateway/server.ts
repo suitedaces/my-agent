@@ -402,15 +402,26 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       try {
         if (handler.typing) handler.typing(chatId).catch(() => {});
         const sent = await handler.send(chatId, 'thinking...');
+        // check if ctx was already cleaned up while we were awaiting
+        if (!channelRunContexts.has(sessionKey)) return;
         ctx.statusMsgId = sent.id;
         statusMessages.set(sessionKey, { channel, chatId, messageId: sent.id });
       } catch {}
+      // bail if cleaned up during await
+      if (!channelRunContexts.has(sessionKey)) return;
       if (handler.typing) {
         ctx.typingInterval = setInterval(() => {
           handler.typing!(chatId).catch(() => {});
         }, 4500);
       }
     })();
+  }
+
+  function clearTypingInterval(ctx: ChannelRunContext) {
+    if (ctx.typingInterval) {
+      clearInterval(ctx.typingInterval);
+      ctx.typingInterval = undefined;
+    }
   }
 
   // process a channel message (or batched messages) through the agent
@@ -479,7 +490,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     // safety net cleanup for non-persistent providers (stream loop already handles this for persistent)
     const ctx = channelRunContexts.get(session.key);
     if (ctx) {
-      if (ctx.typingInterval) clearInterval(ctx.typingInterval);
+      clearTypingInterval(ctx);
       channelRunContexts.delete(session.key);
     }
     toolLogs.delete(session.key);
@@ -1006,6 +1017,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
                 // new turn on channel — create fresh status message if none exists
                 const ctx = channelRunContexts.get(sessionKey);
                 if (ctx && !ctx.statusMsgId) {
+                  clearTypingInterval(ctx);
                   const h = getChannelHandler(ctx.channel);
                   if (h) {
                     try {
@@ -1222,7 +1234,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             // per-turn channel cleanup — delete status msg, send result, reset for next turn
             const ctx = channelRunContexts.get(sessionKey);
             if (ctx) {
-              if (ctx.typingInterval) { clearInterval(ctx.typingInterval); ctx.typingInterval = undefined; }
+              clearTypingInterval(ctx);
               const h = getChannelHandler(ctx.channel);
               if (h && ctx.statusMsgId) {
                 try { await h.delete(ctx.statusMsgId, ctx.chatId); } catch {}
@@ -1292,7 +1304,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         // clean up any remaining channel context (typing indicator, status message)
         const ctx = channelRunContexts.get(sessionKey);
         if (ctx) {
-          if (ctx.typingInterval) clearInterval(ctx.typingInterval);
+          clearTypingInterval(ctx);
           if (ctx.statusMsgId) {
             const h = getChannelHandler(ctx.channel);
             if (h) { try { await h.delete(ctx.statusMsgId, ctx.chatId); } catch {} }
