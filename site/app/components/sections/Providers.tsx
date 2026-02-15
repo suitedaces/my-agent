@@ -8,9 +8,7 @@ import { ProviderOrbit } from "../remotion/ProviderOrbit"
 // Claude logo (Anthropic)
 function ClaudeLogo() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8">
-      <path d="M16.604 3.276L12.926 15.13 7.327 3.276H4L11.38 20.724h3.092L21 3.276h-4.396z" fill="#D4A27F"/>
-    </svg>
+    <img src="/claude-icon.svg" alt="Claude" className="h-8 w-8" />
   )
 }
 
