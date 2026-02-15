@@ -264,7 +264,29 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
   };
 
   // file system watcher manager
-  const fileWatchers = new Map<string, { watcher: FSWatcher; refCount: number }>();
+  type FileWatchEntry = {
+    watcher: FSWatcher;
+    refCount: number;
+    debounceTimer?: ReturnType<typeof setTimeout>;
+    pendingEvent?: { eventType: string; filename: string | null };
+  };
+  const fileWatchers = new Map<string, FileWatchEntry>();
+  const watchedPathsByClient = new Map<WebSocket, Set<string>>();
+  const FS_WATCH_DEBOUNCE_MS = 250;
+  const DEBUG_FS_WATCH = process.env.DORABOT_DEBUG_FS_WATCH === '1';
+
+  const emitFsWatchEvent = (resolved: string) => {
+    const entry = fileWatchers.get(resolved);
+    if (!entry) return;
+    entry.debounceTimer = undefined;
+    const pending = entry.pendingEvent;
+    entry.pendingEvent = undefined;
+    if (!pending) return;
+    broadcast({
+      event: 'fs.change',
+      data: { path: resolved, eventType: pending.eventType, filename: pending.filename, timestamp: Date.now() },
+    });
+  };
 
   const startWatching = (path: string) => {
     const resolved = resolve(path);
@@ -277,11 +299,16 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
     try {
       const watcher = watch(resolved, { recursive: false }, (eventType, filename) => {
-        console.log(`[gateway] fs.watch: ${eventType} in ${resolved}${filename ? '/' + filename : ''}`);
-        broadcast({
-          event: 'fs.change',
-          data: { path: resolved, eventType, filename: filename || null, timestamp: Date.now() },
-        });
+        const entry = fileWatchers.get(resolved);
+        if (!entry) return;
+        const filenameStr = filename ? String(filename) : null;
+        if (DEBUG_FS_WATCH) {
+          console.log(`[gateway] fs.watch: ${eventType} in ${resolved}${filenameStr ? '/' + filenameStr : ''}`);
+        }
+        entry.pendingEvent = { eventType, filename: filenameStr };
+        if (entry.debounceTimer) return;
+        entry.debounceTimer = setTimeout(() => emitFsWatchEvent(resolved), FS_WATCH_DEBOUNCE_MS);
+        entry.debounceTimer.unref?.();
       });
 
       fileWatchers.set(resolved, { watcher, refCount: 1 });
@@ -300,6 +327,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     existing.refCount--;
 
     if (existing.refCount <= 0) {
+      if (existing.debounceTimer) clearTimeout(existing.debounceTimer);
       existing.watcher.close();
       fileWatchers.delete(resolved);
       console.log(`[gateway] stopped watching: ${resolved}`);
@@ -1341,7 +1369,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
   }
 
   // rpc handler
-  async function handleRpc(msg: WsMessage): Promise<WsResponse> {
+  async function handleRpc(msg: WsMessage, clientWs?: WebSocket): Promise<WsResponse> {
     const { method, params, id } = msg;
 
     try {
@@ -2404,15 +2432,22 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (!isPathAllowed(resolvedWatch, config)) {
             return { id, error: `path not allowed: ${resolvedWatch}` };
           }
-          startWatching(watchPath);
-          return { id, result: { watching: resolve(watchPath) } };
+          const tracked = clientWs ? watchedPathsByClient.get(clientWs) : undefined;
+          if (!tracked?.has(resolvedWatch)) {
+            startWatching(resolvedWatch);
+            tracked?.add(resolvedWatch);
+          }
+          return { id, result: { watching: resolvedWatch } };
         }
 
         case 'fs.watch.stop': {
           const watchPath = params?.path as string;
           if (!watchPath) return { id, error: 'path required' };
-          stopWatching(watchPath);
-          return { id, result: { stopped: resolve(watchPath) } };
+          const resolvedWatch = resolve(watchPath);
+          stopWatching(resolvedWatch);
+          const tracked = clientWs ? watchedPathsByClient.get(clientWs) : undefined;
+          tracked?.delete(resolvedWatch);
+          return { id, result: { stopped: resolvedWatch } };
         }
 
         case 'tool.approve': {
@@ -2683,6 +2718,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
   wss.on('connection', (ws) => {
     clients.set(ws, { authenticated: false });
+    watchedPathsByClient.set(ws, new Set());
     console.log(`[gateway] client connected (${clients.size} total)`);
 
     // auth timeout
@@ -2749,17 +2785,26 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         return;
       }
 
-      const response = await handleRpc(msg);
+      const response = await handleRpc(msg, ws);
       ws.send(JSON.stringify(response));
     });
 
+    const releaseClientWatches = () => {
+      const watched = watchedPathsByClient.get(ws);
+      if (!watched) return;
+      for (const p of watched) stopWatching(p);
+      watchedPathsByClient.delete(ws);
+    };
+
     ws.on('close', () => {
+      releaseClientWatches();
       clients.delete(ws);
       console.log(`[gateway] client disconnected (${clients.size} total)`);
     });
 
     ws.on('error', (err) => {
       console.error('[gateway] ws error:', err.message);
+      releaseClientWatches();
       clients.delete(ws);
     });
   });
@@ -2799,11 +2844,14 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       await disposeAllProviders();
 
       // close all file watchers
-      for (const [path, { watcher }] of fileWatchers) {
+      for (const [path, entry] of fileWatchers) {
+        if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
+        const { watcher } = entry;
         watcher.close();
         console.log(`[gateway] closed watcher: ${path}`);
       }
       fileWatchers.clear();
+      watchedPathsByClient.clear();
 
       for (const [ws] of clients) {
         ws.close();
