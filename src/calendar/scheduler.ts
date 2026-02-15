@@ -294,9 +294,10 @@ export function startScheduler(opts: {
   config: Config;
   tickIntervalMs?: number;
   getContext?: () => SchedulerContext;
+  onItemStart?: (item: CalendarItem) => void;
   onItemRun?: (item: CalendarItem, result: { status: string; result?: string; sessionId?: string; usage?: { inputTokens: number; outputTokens: number; totalCostUsd: number }; durationMs?: number; messaged?: boolean }) => void;
 }): SchedulerRunner {
-  const { config, onItemRun } = opts;
+  const { config, onItemRun, onItemStart } = opts;
   const tickMs = opts.tickIntervalMs ?? config.calendar?.tickIntervalMs ?? DEFAULT_TICK_MS;
   let items = loadCalendarItems();
   let stopped = false;
@@ -313,6 +314,7 @@ export function startScheduler(opts: {
 
   const executeItem = async (item: CalendarItem) => {
     try {
+      onItemStart?.(item);
       const ctx = opts.getContext?.() || {};
       const result = await runAgent({
         prompt: item.message,

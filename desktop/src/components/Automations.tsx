@@ -9,10 +9,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { Plus, X, Play, Pause, Trash2, ChevronDown, ChevronRight, Clock, Zap } from 'lucide-react';
+import { Plus, X, Play, Pause, Trash2, ChevronDown, ChevronRight, Clock, Zap, Activity, Radio } from 'lucide-react';
+
+const PULSE_SCHEDULE_ID = 'autonomy-pulse';
+const PULSE_INTERVALS = ['15m', '30m', '1h', '2h'];
+
+type PulseStatus = {
+  enabled: boolean;
+  interval: string;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+};
 
 type AutomationsProps = {
   gateway: ReturnType<typeof useGateway>;
@@ -23,6 +35,9 @@ export function Automations({ gateway }: AutomationsProps) {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [pulse, setPulse] = useState<PulseStatus>({ enabled: false, interval: '30m', lastRunAt: null, nextRunAt: null });
+  const [pulseLoading, setPulseLoading] = useState(false);
+  const [pulseRunning, setPulseRunning] = useState(false);
   const [newItem, setNewItem] = useState({
     summary: '',
     message: '',
@@ -32,11 +47,23 @@ export function Automations({ gateway }: AutomationsProps) {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
 
+  const hasConnectedChannel = gateway.channelStatuses?.some(s => s.connected) ?? false;
+
+  const loadPulseStatus = useCallback(async () => {
+    if (gateway.connectionState !== 'connected') return;
+    try {
+      const result = await gateway.rpc('pulse.status') as PulseStatus;
+      setPulse(result);
+    } catch {
+      // pulse rpc not available yet
+    }
+  }, [gateway.connectionState, gateway.rpc]);
+
   const loadItems = useCallback(async () => {
     if (gateway.connectionState !== 'connected') return;
     try {
       const result = await gateway.rpc('cron.list');
-      if (Array.isArray(result)) setItems(result);
+      if (Array.isArray(result)) setItems(result.filter((i: CalendarItem) => i.id !== PULSE_SCHEDULE_ID));
       setLoading(false);
     } catch (err) {
       console.error('failed to load schedule:', err);
@@ -46,7 +73,54 @@ export function Automations({ gateway }: AutomationsProps) {
 
   useEffect(() => {
     loadItems();
-  }, [loadItems]);
+    loadPulseStatus();
+  }, [loadItems, loadPulseStatus]);
+
+  // refresh pulse status when calendar runs happen
+  useEffect(() => {
+    if (gateway.calendarRuns && gateway.calendarRuns.length > 0) {
+      loadPulseStatus();
+    }
+  }, [gateway.calendarRuns, loadPulseStatus]);
+
+  const togglePulse = async () => {
+    setPulseLoading(true);
+    try {
+      const newMode = pulse.enabled ? 'supervised' : 'autonomous';
+      await gateway.rpc('config.set', { key: 'autonomy', value: newMode });
+      // give scheduler a moment to create/remove the item
+      await new Promise(r => setTimeout(r, 200));
+      await loadPulseStatus();
+      await loadItems();
+    } catch (err) {
+      console.error('failed to toggle pulse:', err);
+    } finally {
+      setPulseLoading(false);
+    }
+  };
+
+  const setPulseInterval = async (interval: string) => {
+    try {
+      await gateway.rpc('pulse.setInterval', { interval });
+      setPulse(prev => ({ ...prev, interval }));
+    } catch (err) {
+      console.error('failed to set pulse interval:', err);
+    }
+  };
+
+  const runPulseNow = async () => {
+    try {
+      setPulseRunning(true);
+      await gateway.rpc('cron.run', { id: PULSE_SCHEDULE_ID });
+      setTimeout(() => {
+        loadPulseStatus();
+        setPulseRunning(false);
+      }, 2000);
+    } catch (err) {
+      console.error('failed to run pulse:', err);
+      setPulseRunning(false);
+    }
+  };
 
   const resetForm = () => {
     setNewItem({
@@ -119,13 +193,24 @@ export function Automations({ gateway }: AutomationsProps) {
     return `at ${item.dtstart}`;
   };
 
-  const formatTime = (iso?: string) => {
+  const formatTime = (iso?: string | null) => {
     if (!iso) return null;
     const d = new Date(iso);
     return d.toLocaleString(undefined, {
       month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
+  };
+
+  const formatRelativeTime = (iso: string | null) => {
+    if (!iso) return null;
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return formatTime(iso);
   };
 
   const canSubmit = newItem.message && newItem.dtstart;
@@ -166,6 +251,68 @@ export function Automations({ gateway }: AutomationsProps) {
 
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-4">
+          {/* pulse card */}
+          <Card className={cn('transition-colors', pulse.enabled && 'border-primary/30')}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Activity className={cn('w-4 h-4', pulse.enabled ? 'text-primary' : 'text-muted-foreground')} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">Pulse</span>
+                    {pulseRunning && (
+                      <Badge className="text-[9px] h-4 animate-pulse bg-primary/20 text-primary border-primary/30">running</Badge>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">dorabot thinks on its own periodically</span>
+                </div>
+                <Switch
+                  checked={pulse.enabled}
+                  onCheckedChange={togglePulse}
+                  disabled={pulseLoading}
+                />
+              </div>
+
+              {pulse.enabled && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Label className="text-[11px] text-muted-foreground w-16">every</Label>
+                    <Select value={pulse.interval} onValueChange={setPulseInterval}>
+                      <SelectTrigger className="h-7 text-[11px] w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PULSE_INTERVALS.map(iv => (
+                          <SelectItem key={iv} value={iv} className="text-[11px]">{iv}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[11px] px-2 ml-auto"
+                      onClick={runPulseNow}
+                      disabled={pulseRunning}
+                    >
+                      <Play className="w-3 h-3 mr-1" />run now
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-x-4 text-[10px] text-muted-foreground">
+                    {pulse.lastRunAt && <span>last: {formatRelativeTime(pulse.lastRunAt)}</span>}
+                    {pulse.nextRunAt && <span>next: {formatTime(pulse.nextRunAt)}</span>}
+                  </div>
+
+                  {!hasConnectedChannel && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-warning/10 border border-warning/20">
+                      <Radio className="w-3.5 h-3.5 text-warning shrink-0" />
+                      <span className="text-[11px] text-warning">connect WhatsApp or Telegram so dorabot can reach you during pulses</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
           {showAddForm && (
             <Card className="border-primary/50">
               <CardContent className="p-4 space-y-3">
@@ -242,12 +389,12 @@ export function Automations({ gateway }: AutomationsProps) {
             </Card>
           )}
 
-          {items.length === 0 ? (
+          {items.length === 0 && !pulse.enabled ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
               <Clock className="w-6 h-6 opacity-40" />
               <span className="text-sm">no automations yet</span>
             </div>
-          ) : (
+          ) : items.length > 0 && (
             <div className="space-y-2">
               {items.map(item => {
                 const isExpanded = expandedItem === item.id;

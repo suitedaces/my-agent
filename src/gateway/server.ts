@@ -32,7 +32,7 @@ import { isCodexInstalled, hasCodexAuth } from '../providers/codex.js';
 import type { ProviderName } from '../config.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { classifyToolCall, cleanToolName, isToolAllowed, type Tier } from './tool-policy.js';
-import { AUTONOMOUS_SCHEDULE_ID, buildAutonomousCalendarItem } from '../autonomous.js';
+import { AUTONOMOUS_SCHEDULE_ID, buildAutonomousCalendarItem, PULSE_INTERVALS, DEFAULT_PULSE_INTERVAL, pulseIntervalToRrule, rruleToPulseInterval } from '../autonomous.js';
 
 const DEFAULT_PORT = 18789;
 const DEFAULT_HOST = '127.0.0.1';
@@ -693,8 +693,16 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           .map(s => ({ channel: s.channel, chatId: ownerChatIds.get(s.channel)! })),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
+      onItemStart: (item) => {
+        if (item.id === AUTONOMOUS_SCHEDULE_ID) {
+          broadcast({ event: 'pulse:started', data: { timestamp: Date.now() } });
+        }
+      },
       onItemRun: (item, result) => {
         broadcast({ event: 'calendar.result', data: { item: item.id, summary: item.summary, ...result, timestamp: Date.now() } });
+        if (item.id === AUTONOMOUS_SCHEDULE_ID) {
+          broadcast({ event: 'pulse:completed', data: { timestamp: Date.now(), ...result } });
+        }
       },
     });
     setScheduler(scheduler);
@@ -1790,6 +1798,29 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (!scheduler) return { id, error: 'scheduler not enabled' };
           const icsString = scheduler.exportIcs();
           return { id, result: { ics: icsString } };
+        }
+
+        case 'pulse.status': {
+          const pulseItem = scheduler?.listItems().find(i => i.id === AUTONOMOUS_SCHEDULE_ID);
+          return {
+            id,
+            result: {
+              enabled: !!pulseItem?.enabled,
+              interval: pulseItem ? rruleToPulseInterval(pulseItem.rrule || '') : DEFAULT_PULSE_INTERVAL,
+              lastRunAt: pulseItem?.lastRunAt || null,
+              nextRunAt: pulseItem?.nextRunAt || null,
+            },
+          };
+        }
+
+        case 'pulse.setInterval': {
+          if (!scheduler) return { id, error: 'scheduler not enabled' };
+          const interval = params?.interval as string;
+          if (!PULSE_INTERVALS.includes(interval)) return { id, error: `interval must be one of: ${PULSE_INTERVALS.join(', ')}` };
+          const item = scheduler.listItems().find(i => i.id === AUTONOMOUS_SCHEDULE_ID);
+          if (!item) return { id, error: 'pulse not enabled' };
+          const updated = scheduler.updateItem(AUTONOMOUS_SCHEDULE_ID, { rrule: pulseIntervalToRrule(interval) });
+          return { id, result: updated };
         }
 
         case 'goals.list': {
