@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, session, ipcMain } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { is } from '@electron-toolkit/utils';
 import * as path from 'path';
 import { GatewayManager } from './gateway-manager';
@@ -7,6 +8,68 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let gatewayManager: GatewayManager | null = null;
+
+// --- Auto-updater setup ---
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function sendUpdateStatus(event: string, data?: any): void {
+  mainWindow?.webContents.send('update-status', { event, ...data });
+}
+
+function setupAutoUpdater(): void {
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[updater] Checking for updates...');
+    sendUpdateStatus('checking');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[updater] Update available: ${info.version}`);
+    sendUpdateStatus('available', { version: info.version, releaseNotes: info.releaseNotes });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[updater] No updates available');
+    sendUpdateStatus('not-available');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateStatus('downloading', { percent: Math.round(progress.percent) });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[updater] Update downloaded: ${info.version}`);
+    sendUpdateStatus('downloaded', { version: info.version });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[updater] Error:', err.message);
+    sendUpdateStatus('error', { message: err.message });
+  });
+
+  // IPC handlers for renderer
+  ipcMain.on('update-check', () => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[updater] Check failed:', err.message);
+    });
+  });
+
+  ipcMain.on('update-download', () => {
+    autoUpdater.downloadUpdate().catch((err) => {
+      console.error('[updater] Download failed:', err.message);
+    });
+  });
+
+  ipcMain.on('update-install', () => {
+    autoUpdater.quitAndInstall(false, true);
+  });
+
+  // Check for updates 10s after launch, then every 4 hours
+  if (!is.dev) {
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+  }
+}
 
 function getIconPath(): string {
   return is.dev
@@ -152,6 +215,7 @@ app.on('ready', async () => {
   });
 
   createWindow();
+  setupAutoUpdater();
 
   ipcMain.on('dock-bounce', (_event, type: 'critical' | 'informational') => {
     if (app.dock) {

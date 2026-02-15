@@ -26,6 +26,12 @@ import {
 } from 'lucide-react';
 
 type SessionFilter = 'all' | 'desktop' | 'telegram' | 'whatsapp';
+type UpdateState = {
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error';
+  version?: string;
+  percent?: number;
+  message?: string;
+};
 
 // soft two-tone chime via web audio api
 function playNotifSound() {
@@ -79,6 +85,38 @@ export default function App() {
   const [starCount, setStarCount] = useState<number | null>(null);
   const [draggingTab, setDraggingTab] = useState<Tab | null>(null);
   const { theme, toggle: toggleTheme } = useTheme();
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' });
+
+  // Auto-update listener
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onUpdateStatus) return;
+    const cleanup = api.onUpdateStatus((status: any) => {
+      switch (status.event) {
+        case 'checking':
+          setUpdateState({ status: 'checking' });
+          break;
+        case 'available':
+          setUpdateState({ status: 'available', version: status.version });
+          break;
+        case 'not-available':
+          setUpdateState({ status: 'idle' });
+          break;
+        case 'downloading':
+          setUpdateState(prev => ({ ...prev, status: 'downloading', percent: status.percent }));
+          break;
+        case 'downloaded':
+          setUpdateState({ status: 'downloaded', version: status.version });
+          break;
+        case 'error':
+          setUpdateState({ status: 'error', message: status.message });
+          // Auto-dismiss error after 10s
+          setTimeout(() => setUpdateState(prev => prev.status === 'error' ? { status: 'idle' } : prev), 10000);
+          break;
+      }
+    });
+    return cleanup;
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -572,6 +610,48 @@ export default function App() {
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
       </div>
+
+      {/* Update banner */}
+      {updateState.status === 'available' && (
+        <div className="shrink-0 px-4 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2 text-xs">
+          <span className="text-primary">Update {updateState.version} available</span>
+          <button
+            onClick={() => (window as any).electronAPI?.downloadUpdate?.()}
+            className="ml-auto px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-medium hover:bg-primary/90 transition-colors"
+          >
+            Download
+          </button>
+          <button
+            onClick={() => setUpdateState({ status: 'idle' })}
+            className="text-muted-foreground hover:text-foreground text-[10px]"
+          >
+            Later
+          </button>
+        </div>
+      )}
+      {updateState.status === 'downloading' && (
+        <div className="shrink-0 px-4 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2 text-xs">
+          <Loader2 className="w-3 h-3 animate-spin text-primary" />
+          <span className="text-primary">Downloading update... {updateState.percent != null ? `${updateState.percent}%` : ''}</span>
+        </div>
+      )}
+      {updateState.status === 'downloaded' && (
+        <div className="shrink-0 px-4 py-1.5 bg-success/10 border-b border-success/20 flex items-center gap-2 text-xs">
+          <span className="text-success">Update {updateState.version} ready</span>
+          <button
+            onClick={() => (window as any).electronAPI?.installUpdate?.()}
+            className="ml-auto px-2 py-0.5 rounded bg-success text-success-foreground text-[10px] font-medium hover:bg-success/90 transition-colors"
+          >
+            Restart to update
+          </button>
+          <button
+            onClick={() => setUpdateState({ status: 'idle' })}
+            className="text-muted-foreground hover:text-foreground text-[10px]"
+          >
+            Later
+          </button>
+        </div>
+      )}
 
       {/* main layout */}
       <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0">

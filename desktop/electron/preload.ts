@@ -14,6 +14,7 @@ let tokenDelivered = false;
 
 const electronAPI = {
   platform: process.platform,
+  appVersion: (() => { try { return require('electron').app?.getVersion?.() || process.env.npm_package_version || '0.0.0'; } catch { return '0.0.0'; } })(),
   consumeGatewayToken: (): string | null => {
     if (tokenDelivered) return null;
     tokenDelivered = true;
@@ -24,6 +25,15 @@ const electronAPI = {
   onCloseTab: (cb: () => void) => {
     ipcRenderer.on('close-tab', cb);
     return () => { ipcRenderer.removeListener('close-tab', cb); };
+  },
+  // Auto-update IPC
+  checkForUpdate: () => ipcRenderer.send('update-check'),
+  downloadUpdate: () => ipcRenderer.send('update-download'),
+  installUpdate: () => ipcRenderer.send('update-install'),
+  onUpdateStatus: (cb: (status: { event: string; version?: string; percent?: number; message?: string; releaseNotes?: string }) => void) => {
+    const handler = (_e: any, status: any) => cb(status);
+    ipcRenderer.on('update-status', handler);
+    return () => { ipcRenderer.removeListener('update-status', handler); };
   },
 };
 

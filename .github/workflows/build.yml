@@ -31,10 +31,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run bundle-gateway
           npx electron-vite build
-          npx electron-builder --mac --arm64
+          npx electron-builder --mac --arm64 --publish always
         working-directory: desktop
 
       - name: Upload DMG
@@ -43,8 +44,8 @@ jobs:
           name: dorabot-dmg
           path: desktop/release/*.dmg
 
-      - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
         with:
-          files: desktop/release/*.dmg
+          name: dorabot-zip
+          path: desktop/release/*.zip

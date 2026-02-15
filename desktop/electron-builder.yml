@@ -2,6 +2,11 @@ appId: com.dorabot.desktop
 productName: dorabot
 copyright: Copyright 2026 Ishan Nagpal
 
+publish:
+  provider: github
+  owner: suitedaces
+  repo: dorabot
+
 directories:
   output: release
   buildResources: build
@@ -31,6 +36,9 @@ mac:
   icon: build/icon.icns
   target:
     - target: dmg
+      arch:
+        - arm64
+    - target: zip
       arch:
         - arm64
   hardenedRuntime: true
