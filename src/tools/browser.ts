@@ -36,7 +36,6 @@ import {
   browserListNetworkRequests,
   browserGetNetworkRequest,
   browserPdf,
-  browserPromptLogin,
   browserScroll,
 } from '../browser/actions.js';
 
@@ -86,7 +85,6 @@ const browserActions = [
   'list_network_requests',
   'get_network_request',
   'pdf',
-  'prompt_login',
   'scroll',
 ] as const;
 
@@ -439,10 +437,6 @@ export const browserTool = tool(
 
         case 'pdf':
           result = await browserPdf(args.path || args.filePath);
-          break;
-
-        case 'prompt_login':
-          result = await browserPromptLogin(browserConfig);
           break;
 
         case 'scroll':

@@ -682,22 +682,6 @@ export async function browserScreenshot(
   };
 }
 
-// prompt_login — screenshot + ask user to log in manually
-export async function browserPromptLogin(config: BrowserConfig): Promise<ActionResult> {
-  const page = await ensureBrowser(config);
-  ensureRuntime(page);
-
-  const url = page.url();
-  const title = await page.title().catch(() => '(unavailable)');
-  const buffer = await page.screenshot();
-  const out = join(tmpdir(), `browser-login-${Date.now()}.png`);
-  await writeFile(out, buffer);
-
-  return ok(
-    `Login needed at: ${url} (${title})\nSaved screenshot path: ${out}\nAsk the user to log in manually in the browser window, then use take_snapshot to verify.`,
-  );
-}
-
 // click
 export async function browserClick(uid: string, opts: { dblClick?: boolean; includeSnapshot?: boolean } = {}): Promise<ActionResult> {
   const page = getPage();

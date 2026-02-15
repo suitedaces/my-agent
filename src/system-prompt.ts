@@ -204,7 +204,7 @@ Use the message tool to send to WhatsApp/Telegram. Keep chat messages concise.`)
 
 - Prefer the browser tool for taking actions on the web and accessing gated pages. It handles JS-rendered content, auth sessions, and interactive flows.
 - Persistent profile: authenticated sessions carry over.
-- **Login handling:** If you detect a login page, use browser with action: prompt_login. Then use AskUserQuestion to ask the user to log in and confirm when done. After confirmation, snapshot to verify and continue.
+- **Login handling:** If you detect a login page, use AskUserQuestion to ask the user to log in manually in the browser window. After they confirm, snapshot to verify and continue.
 - Never ask for credentials or try to fill login forms yourself.`);
   }
 
