@@ -37,6 +37,14 @@ import { AUTONOMOUS_SCHEDULE_ID, buildAutonomousCalendarItem, PULSE_INTERVALS, D
 const DEFAULT_PORT = 18789;
 const DEFAULT_HOST = '127.0.0.1';
 
+function macNotify(title: string, body: string) {
+  try {
+    const t = title.replace(/"/g, '\\"');
+    const b = body.replace(/"/g, '\\"');
+    execSync(`osascript -e 'display notification "${b}" with title "${t}"'`, { stdio: 'ignore' });
+  } catch { /* ignore */ }
+}
+
 // ── Tool status display maps ──────────────────────────────────────────
 // Used to build the live status message shown on Telegram/WhatsApp while the agent works.
 // Output is markdown that gets converted to HTML by markdownToTelegramHtml().
@@ -799,10 +807,22 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       }),
       onItemStart: (item) => {
         if (item.id === AUTONOMOUS_SCHEDULE_ID) {
+          macNotify('Dora', 'Checking in... 👀');
           broadcast({ event: 'pulse:started', data: { timestamp: Date.now() } });
+        } else {
+          macNotify('Dora', `Working on "${item.summary}"`);
         }
       },
       onItemRun: (item, result) => {
+        if (item.id === AUTONOMOUS_SCHEDULE_ID) {
+          if (result.messaged) {
+            macNotify('Dora', 'Sent you a message 💬');
+          } else {
+            macNotify('Dora', result.status === 'ran' ? 'All caught up ✓' : 'Something went wrong, check logs');
+          }
+        } else {
+          macNotify('Dora', result.status === 'ran' ? `Done with "${item.summary}" ✓` : `"${item.summary}" failed`);
+        }
         broadcast({ event: 'calendar.result', data: { item: item.id, summary: item.summary, ...result, timestamp: Date.now() } });
         if (item.id === AUTONOMOUS_SCHEDULE_ID) {
           broadcast({ event: 'pulse:completed', data: { timestamp: Date.now(), ...result } });

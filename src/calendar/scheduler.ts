@@ -304,10 +304,12 @@ export function startScheduler(opts: {
   const running = new Set<string>();
 
   // compute nextRunAt for all enabled items on startup
-  // items that never ran fire immediately
+  const now = Date.now();
   for (const item of items) {
     if (item.enabled !== false) {
-      if (!item.lastRunAt) {
+      // never ran + created in the last 60s = brand new, fire immediately
+      const isNew = !item.lastRunAt && (now - new Date(item.createdAt).getTime()) < 60_000;
+      if (isNew) {
         item.nextRunAt = new Date().toISOString();
       } else {
         const next = computeNextRun(item);
