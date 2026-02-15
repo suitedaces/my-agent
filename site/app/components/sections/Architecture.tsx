@@ -44,7 +44,8 @@ export function Architecture() {
               <span className="ml-2 text-xs text-text-muted">architecture</span>
             </div>
             <div className="p-5 sm:p-7">
-              <pre className="text-xs sm:text-sm md:text-base text-text-secondary leading-relaxed overflow-x-auto">
+              {/* desktop: full diagram */}
+              <pre className="hidden sm:block text-xs sm:text-sm md:text-base text-text-secondary leading-relaxed overflow-x-auto">
                 {`┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
 │ Desktop  │  │ Telegram │  │ WhatsApp │  │  Slack   │
 │(Electron)│  │ (grammy) │  │(Baileys) │  │ (Bolt)   │
@@ -68,6 +69,20 @@ export function Architecture() {
 │ Tools │ │Sessions │ │ Cron  │
 │ (MCP) │ │(SQLite) │ │ Sched │
 └───────┘ └─────────┘ └───────┘`}
+              </pre>
+              {/* mobile: compact diagram */}
+              <pre className="sm:hidden text-[11px] text-text-secondary leading-relaxed overflow-x-auto">
+                {`Desktop · Telegram · WhatsApp · Slack
+            │
+    ┌───────▼────────┐
+    │ Gateway Server │ WS :18789
+    └───────┬────────┘
+    ┌───────▼────────┐
+    │ Provider Layer │ Claude/Codex
+    └───────┬────────┘
+       ┌────┼────┐
+    Tools Sessions Cron
+    (MCP) (SQLite)  Sched`}
               </pre>
             </div>
           </div>

@@ -85,7 +85,7 @@ export function Providers() {
             Multi-provider support. Switch from the desktop app or config.
           </p>
         </motion.div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {providers.map((p, i) => (
             <motion.div
               key={p.name}

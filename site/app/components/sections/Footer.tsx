@@ -1,7 +1,7 @@
 export function Footer() {
   return (
     <footer className="border-t border-border px-6 py-8">
-      <div className="mx-auto flex max-w-6xl items-center justify-between">
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 sm:flex-row sm:justify-between">
         <div className="flex items-center gap-3 text-sm text-text-muted">
           <img src="/dorabot.png" alt="dorabot" className="h-6 w-6" />
           dorabot
