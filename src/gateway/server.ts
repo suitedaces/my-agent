@@ -16,7 +16,6 @@ import { ChannelManager } from './channel-manager.js';
 import { SessionManager } from '../session/manager.js';
 import { streamAgent, type AgentResult } from '../agent.js';
 import type { RunHandle } from '../providers/types.js';
-import { startHeartbeatRunner, type HeartbeatRunner } from '../heartbeat/runner.js';
 import { startScheduler, loadCalendarItems, migrateCronToCalendar, type SchedulerRunner } from '../calendar/scheduler.js';
 import { checkSkillEligibility, loadAllSkills, findSkillByName } from '../skills/loader.js';
 import type { InboundMessage } from '../channels/types.js';
@@ -222,7 +221,6 @@ export type Gateway = {
   broadcast: (event: WsEvent) => void;
   sessionRegistry: SessionRegistry;
   channelManager: ChannelManager;
-  heartbeatRunner: HeartbeatRunner | null;
   scheduler: SchedulerRunner | null;
   context: GatewayContext;
 };
@@ -646,23 +644,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     },
   });
 
-  // heartbeat
-  let heartbeatRunner: HeartbeatRunner | null = null;
-  let lastHeartbeatStatus: string | null = null;
-
-  if (config.heartbeat?.enabled) {
-    heartbeatRunner = startHeartbeatRunner({
-      config,
-      onMessage: (text) => {
-        broadcast({ event: 'heartbeat.result', data: { text, timestamp: Date.now() } });
-      },
-      onEvent: (event) => {
-        lastHeartbeatStatus = event.status;
-        broadcast({ event: 'heartbeat.run', data: { ...event, timestamp: Date.now() } });
-      },
-    });
-  }
-
   // calendar scheduler
   let scheduler: SchedulerRunner | null = null;
   if (config.calendar?.enabled !== false && config.cron?.enabled !== false) {
@@ -680,7 +661,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     config,
     sessionRegistry,
     channelManager,
-    heartbeatRunner,
     scheduler,
     broadcast,
   };
@@ -1349,13 +1329,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
               startedAt,
               channels: channelManager.getStatuses(),
               sessions: sessionRegistry.list(),
-              heartbeat: heartbeatRunner ? {
-                enabled: config.heartbeat?.enabled ?? false,
-                interval: config.heartbeat?.every || '30m',
-                lastRunAt: null,
-                nextDueAt: null,
-                lastStatus: lastHeartbeatStatus,
-              } : null,
               calendar: scheduler ? {
                 enabled: true,
                 itemCount: scheduler.listItems().length,
@@ -1797,23 +1770,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           saveGoals(goals);
           broadcast({ event: 'goals.update', data: {} });
           return { id, result: task };
-        }
-
-        case 'heartbeat.status': {
-          return {
-            id,
-            result: {
-              enabled: config.heartbeat?.enabled ?? false,
-              interval: config.heartbeat?.every || '30m',
-              lastStatus: lastHeartbeatStatus,
-            },
-          };
-        }
-
-        case 'heartbeat.run': {
-          if (!heartbeatRunner) return { id, error: 'heartbeat not enabled' };
-          const hbResult = await heartbeatRunner.runNow('manual');
-          return { id, result: hbResult };
         }
 
         case 'skills.list': {
@@ -2705,7 +2661,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
 
   return {
     close: async () => {
-      heartbeatRunner?.stop();
       scheduler?.stop();
       await channelManager.stopAll();
       await disposeAllProviders();
@@ -2731,7 +2686,6 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     broadcast,
     sessionRegistry,
     channelManager,
-    heartbeatRunner,
     scheduler,
     context,
   };

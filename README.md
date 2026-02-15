@@ -75,14 +75,6 @@ An Electron app that connects to the gateway over WebSocket.
 - **Automations** - Manage cron jobs, reminders, and recurring tasks
 - **Settings** - Provider setup, approval modes, sandbox config, tool policies
 
-## Proactive Agent
-
-dorabot doesn't just respond - it acts on its own. A configurable heartbeat loop wakes the agent on a schedule to check `HEARTBEAT.md` for pending work, propose new goals, and execute approved tasks without being prompted.
-
-- **Heartbeat** - Runs on a configurable interval (default 30m). Reads `HEARTBEAT.md`, decides if there's work to do. If nothing needs attention, it stays quiet.
-- **Goal proposals** - The agent proposes goals (batch or individual). They land in the "Proposed" column on the Kanban board. Drag to "Approved" and the agent picks them up.
-- **Active hours** - Configurable quiet hours so it doesn't burn tokens while you sleep.
-
 ## Multi-Provider Support
 
 Pick the model you're already paying for.
@@ -200,11 +192,6 @@ Ask dorabot to onboard you, or edit the files directly:
     "whatsapp": { "enabled": false },
     "telegram": { "enabled": false, "token": "" }
   },
-  "heartbeat": {
-    "enabled": false,
-    "every": "30m",
-    "activeHours": { "start": "09:00", "end": "23:00", "timezone": "America/Los_Angeles" }
-  }
 }
 ```
 

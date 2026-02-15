@@ -13,7 +13,6 @@ Personal AI agent with multi-channel messaging, browser automation, and persiste
 - **Browser**: Playwright-core via CDP, persistent profile at `~/.dorabot/browser/profile/`, port 19222
 - **Skills**: Markdown files in `./skills/` and `~/.dorabot/skills/`, YAML frontmatter for metadata
 - **Providers**: Pluggable — Claude (Agent SDK, default) or OpenAI Codex (Codex SDK)
-- **Heartbeat**: Configurable periodic agent polling loop for proactive work
 - **Calendar**: RFC 5545 iCal RRULE-based scheduling (replaced cron)
 
 ## Build
@@ -72,9 +71,6 @@ npm run dev:cli                      # interactive CLI mode
 
 ### Calendar
 - `src/calendar/scheduler.ts` — iCal RRULE-based scheduler, auto-migration from legacy cron_jobs
-
-### Heartbeat
-- `src/heartbeat/runner.ts` — periodic agent polling, configurable interval/active hours, reads HEARTBEAT.md
 
 ### Browser
 - `src/browser/manager.ts` — find Chromium, launch via CDP, singleton page

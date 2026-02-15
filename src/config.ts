@@ -37,22 +37,6 @@ export type AgentDefinition = {
   model?: 'sonnet' | 'opus' | 'haiku' | 'inherit';
 };
 
-export type HeartbeatConfig = {
-  enabled?: boolean;
-  every?: string;
-  prompt?: string;
-  target?: 'last' | 'none' | string;
-  ackMaxChars?: number;
-  activeHours?: {
-    start?: string;
-    end?: string;
-    timezone?: string;
-  };
-  session?: string;
-  model?: string;
-  includeReasoning?: boolean;
-};
-
 export type CronConfig = {
   enabled?: boolean;
   jobsFile?: string;
@@ -150,7 +134,6 @@ export type Config = {
   };
   agents: Record<string, AgentDefinition>;
   sandbox: SandboxSettings;
-  heartbeat?: HeartbeatConfig;
   cron?: CronConfig;
   calendar?: CalendarConfig;
   channels?: ChannelsConfig;

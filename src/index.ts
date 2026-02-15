@@ -9,7 +9,6 @@ import { runAgent, streamAgent } from './agent.js';
 import { SessionManager } from './session/manager.js';
 import { getEligibleSkills } from './skills/loader.js';
 import { listAgentNames, describeAgents } from './agents/definitions.js';
-import { startHeartbeatRunner, runHeartbeatOnce } from './heartbeat/runner.js';
 import { startScheduler, loadCalendarItems, migrateCronToCalendar } from './calendar/scheduler.js';
 import { startGateway } from './gateway/index.js';
 import { getAllChannelStatuses } from './channels/index.js';
@@ -49,7 +48,7 @@ async function interactiveMode(config: Awaited<ReturnType<typeof loadConfig>>): 
   let currentSessionId: string | undefined;
 
   console.log('dorabot interactive mode');
-  console.log('Commands: /new, /resume <id>, /sessions, /skills, /agents, /heartbeat, /schedule, /channels, /exit\n');
+  console.log('Commands: /new, /resume <id>, /sessions, /skills, /agents, /schedule, /channels, /exit\n');
 
   const promptUser = (): void => {
     rl.question('> ', async (input) => {
@@ -103,19 +102,6 @@ async function interactiveMode(config: Awaited<ReturnType<typeof loadConfig>>): 
           case 'agents':
             console.log('Available agents:');
             console.log(describeAgents(config));
-            break;
-
-          case 'heartbeat':
-            if (args[0] === 'run') {
-              console.log('Running heartbeat...');
-              const hbResult = await runHeartbeatOnce({ config });
-              console.log(`Heartbeat: ${hbResult.status}${hbResult.reason ? ` (${hbResult.reason})` : ''}`);
-            } else if (args[0] === 'status') {
-              console.log(`Heartbeat enabled: ${config.heartbeat?.enabled ?? false}`);
-              console.log(`Interval: ${config.heartbeat?.every ?? '30m'}`);
-            } else {
-              console.log('Usage: /heartbeat run | /heartbeat status');
-            }
             break;
 
           case 'schedule':
@@ -239,8 +225,8 @@ dorabot - Claude Agent SDK powered assistant
 Usage:
   dorabot [options] [message]
   dorabot -i                    # interactive mode
-  dorabot -d                    # daemon mode (heartbeat + scheduler)
-  dorabot -g                    # gateway mode (channels + heartbeat + scheduler)
+  dorabot -d                    # daemon mode (scheduler)
+  dorabot -g                    # gateway mode (channels + scheduler)
   dorabot -m "Hello"            # single message
   echo "Hello" | dorabot        # pipe input
 
@@ -250,8 +236,8 @@ Options:
   -c, --config <path>     Config file path
   -s, --stream            Stream output (default: true)
   -i, --interactive       Interactive mode
-  -d, --daemon            Daemon mode (run heartbeat + scheduler)
-  -g, --gateway           Gateway mode (channels + heartbeat + scheduler)
+  -d, --daemon            Daemon mode (run scheduler)
+  -g, --gateway           Gateway mode (channels + scheduler)
   --model <name>          Override model
   -h, --help              Show help
   -v, --version           Show version
@@ -267,7 +253,6 @@ Commands (interactive mode):
   /sessions               List sessions
   /skills                 List available skills
   /agents                 List available agents
-  /heartbeat run          Run heartbeat now
   /schedule list          List scheduled items
   /channels               List channel statuses
   /exit                   Exit
@@ -305,7 +290,7 @@ Commands (interactive mode):
     process.exit(0);
   }
 
-  // gateway mode - run channels + heartbeat + cron (all managed by gateway)
+  // gateway mode - run channels + scheduler (all managed by gateway)
   if (values.gateway) {
     console.log('Starting gateway mode...');
 
@@ -323,15 +308,9 @@ Commands (interactive mode):
     return;
   }
 
-  // daemon mode - run heartbeat + scheduler in background
+  // daemon mode - run scheduler in background
   if (values.daemon) {
     console.log('Starting daemon mode...');
-
-    const heartbeatRunner = startHeartbeatRunner({
-      config,
-      onMessage: (text) => console.log(`[heartbeat] ${text}`),
-      onEvent: (event) => console.log(`[heartbeat] ${event.status}: ${event.reason || ''}`),
-    });
 
     migrateCronToCalendar();
     const scheduler = startScheduler({
@@ -341,15 +320,12 @@ Commands (interactive mode):
 
     console.log('Daemon running. Press Ctrl+C to stop.');
 
-    // keep process alive
     process.on('SIGINT', () => {
       console.log('\nStopping daemon...');
-      heartbeatRunner.stop();
       scheduler.stop();
       process.exit(0);
     });
 
-    // prevent exit
     await new Promise(() => {});
     return;
   }

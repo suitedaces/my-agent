@@ -2,7 +2,14 @@ import rrule from 'rrule';
 const { RRule } = rrule;
 import type { Config } from '../config.js';
 import { runAgent } from '../agent.js';
-import { parseDurationMs } from '../heartbeat/runner.js';
+export function parseDurationMs(duration: string): number | null {
+  const match = duration.match(/^(\d+)(ms|s|m|h|d)?$/i);
+  if (!match) return null;
+  const value = parseInt(match[1], 10);
+  const unit = (match[2] || 'm').toLowerCase();
+  const multipliers: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  return value * (multipliers[unit] || 60_000);
+}
 import { getDb } from '../db.js';
 
 export type CalendarItemType = 'event' | 'todo' | 'reminder';

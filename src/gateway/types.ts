@@ -3,7 +3,6 @@ export type GatewayStatus = {
   startedAt: number | null;
   channels: ChannelStatusInfo[];
   sessions: SessionInfo[];
-  heartbeat: HeartbeatStatusInfo | null;
   calendar: CalendarStatusInfo | null;
 };
 
@@ -28,14 +27,6 @@ export type ChannelStatusInfo = {
   running: boolean;
   connected: boolean;
   lastError: string | null;
-};
-
-export type HeartbeatStatusInfo = {
-  enabled: boolean;
-  interval: string;
-  lastRunAt: number | null;
-  nextDueAt: number | null;
-  lastStatus: string | null;
 };
 
 export type CalendarStatusInfo = {
@@ -90,8 +81,6 @@ export type RpcMethod =
   | 'goals.update'
   | 'goals.delete'
   | 'goals.move'
-  | 'heartbeat.status'
-  | 'heartbeat.run'
   | 'skills.list'
   | 'config.get'
   | 'config.set'
@@ -118,8 +107,6 @@ export type GatewayEventName =
   | 'channel.message'
   | 'channel.status'
   | 'channel.reply'
-  | 'heartbeat.run'
-  | 'heartbeat.result'
   | 'calendar.run'
   | 'calendar.result'
   | 'session.update'
@@ -132,7 +119,6 @@ export type GatewayContext = {
   config: import('../config.js').Config;
   sessionRegistry: import('./session-registry.js').SessionRegistry;
   channelManager: import('./channel-manager.js').ChannelManager;
-  heartbeatRunner: import('../heartbeat/runner.js').HeartbeatRunner | null;
   scheduler: import('../calendar/scheduler.js').SchedulerRunner | null;
   broadcast: (event: WsEvent) => void;
 };

@@ -159,7 +159,6 @@ export type NotifiableEvent =
   | { type: 'goals.update' }
   | { type: 'whatsapp.status'; status: string }
   | { type: 'telegram.status'; status: string }
-  | { type: 'heartbeat'; text: string }
   | { type: 'calendar'; summary: string };
 
 export type BackgroundRun = {
@@ -904,14 +903,6 @@ export function useGateway(url = 'wss://localhost:18789') {
       case 'fs.change': {
         const d = data as { path: string; eventType: string; filename: string | null };
         fsChangeListenersRef.current.forEach(listener => listener(d.path));
-        break;
-      }
-
-      case 'heartbeat.result': {
-        const d = data as { text: string; timestamp: number };
-        if (d.text) {
-          onNotifiableEventRef.current?.({ type: 'heartbeat', text: d.text });
-        }
         break;
       }
 

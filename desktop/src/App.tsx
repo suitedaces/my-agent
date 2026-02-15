@@ -189,13 +189,6 @@ export default function App() {
           (window as any).electronAPI?.dockBounce?.('critical');
           playNotifSound();
           break;
-        case 'heartbeat':
-          if (!windowFocused) {
-            toast('heartbeat', { description: event.text.slice(0, 80), duration: 5000 });
-            new Notification('dorabot', { body: `heartbeat: ${event.text.slice(0, 80)}` });
-            playNotifSound();
-          }
-          break;
         case 'calendar':
           toast('calendar event', { description: event.summary, duration: 5000 });
           if (!windowFocused) {
