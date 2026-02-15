@@ -37,6 +37,7 @@ import {
   browserGetNetworkRequest,
   browserPdf,
   browserScroll,
+  acquireBrowserMutex,
 } from '../browser/actions.js';
 
 // browser config loaded at runtime, set by gateway/startup
@@ -202,6 +203,7 @@ export const browserTool = tool(
     const fromUid = args.from_uid || args.from_ref;
     const toUid = args.to_uid || args.to_ref;
 
+    const releaseMutex = await acquireBrowserMutex();
     try {
       let result;
 
@@ -480,6 +482,8 @@ export const browserTool = tool(
         content: [{ type: 'text' as const, text: `Browser error: ${e.message}` }],
         isError: true,
       };
+    } finally {
+      releaseMutex();
     }
   },
 );

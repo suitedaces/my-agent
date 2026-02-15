@@ -89,6 +89,47 @@ type TraceRecord = {
 
 const runtimeByPage = new WeakMap<Page, PageRuntimeState>();
 
+// dialog tracking — one dialog at a time per page
+let activeDialog: Dialog | null = null;
+
+export function getActiveDialog(): Dialog | null {
+  return activeDialog;
+}
+
+export function clearActiveDialog(): void {
+  activeDialog = null;
+}
+
+// mutex — serialize all browser actions
+let mutexLocked = false;
+const mutexQueue: Array<() => void> = [];
+
+export async function acquireBrowserMutex(): Promise<() => void> {
+  if (!mutexLocked) {
+    mutexLocked = true;
+    return () => {
+      const next = mutexQueue.shift();
+      if (next) {
+        next();
+      } else {
+        mutexLocked = false;
+      }
+    };
+  }
+  return new Promise(resolve => {
+    mutexQueue.push(() => {
+      resolve(() => {
+        const next = mutexQueue.shift();
+        if (next) {
+          next();
+        } else {
+          mutexLocked = false;
+        }
+      });
+    });
+  });
+}
+
 let isTracing = false;
 let traceStartTime = 0;
 let traceStartUrl = '';
@@ -136,7 +177,10 @@ const NETWORK_CONDITIONS: Record<
 };
 
 function ok(text: string): ActionResult {
-  return { text };
+  const dialogWarning = activeDialog
+    ? `\n\n⚠ Open ${activeDialog.type()} dialog: "${activeDialog.message()}" — call handle_dialog before continuing.`
+    : '';
+  return { text: text + dialogWarning };
 }
 
 function err(text: string): ActionResult {
@@ -315,6 +359,10 @@ function ensureRuntime(page: Page): PageRuntimeState {
 function attachRuntimeListeners(page: Page, state: PageRuntimeState) {
   if (state.listenersAttached) return;
   state.listenersAttached = true;
+
+  page.on('dialog', (dialog: Dialog) => {
+    activeDialog = dialog;
+  });
 
   page.on('framenavigated', frame => {
     if (frame !== page.mainFrame()) return;
@@ -1011,7 +1059,8 @@ export async function browserHandleDialog(
   if (!page) return err('Browser not running');
 
   try {
-    const dialog = await page.waitForEvent('dialog', {
+    // use tracked dialog if available, otherwise wait for one
+    const dialog = activeDialog ?? await page.waitForEvent('dialog', {
       timeout: normalizeTimeout(timeout) ?? 5_000,
     });
 
@@ -1021,6 +1070,7 @@ export async function browserHandleDialog(
       await dialog.dismiss();
     }
 
+    activeDialog = null;
     return ok(`Handled dialog (${dialog.type()}) with action=${action}. Message: ${dialog.message()}`);
   } catch (e) {
     return err(`No dialog handled: ${errorMessage(e)}`);
