@@ -1,8 +1,9 @@
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 export const WORKSPACE_DIR = join(homedir(), '.dorabot', 'workspace');
+export const MEMORIES_DIR = join(WORKSPACE_DIR, 'memories');
 
 // files loaded into system prompt (order matters)
 const WORKSPACE_FILES = ['SOUL.md', 'USER.md', 'AGENTS.md', 'MEMORY.md'] as const;
@@ -17,6 +18,8 @@ function stripFrontmatter(content: string): string {
 
 export type WorkspaceFiles = Record<string, string>;
 
+const MEMORY_MAX_LINES = 500;
+
 export function loadWorkspaceFiles(dir?: string): WorkspaceFiles {
   const wsDir = dir || WORKSPACE_DIR;
   const files: WorkspaceFiles = {};
@@ -25,10 +28,16 @@ export function loadWorkspaceFiles(dir?: string): WorkspaceFiles {
     const path = join(wsDir, name);
     if (existsSync(path)) {
       try {
-        const raw = readFileSync(path, 'utf-8').trim();
-        if (raw) {
-          files[name] = stripFrontmatter(raw);
+        let raw = readFileSync(path, 'utf-8').trim();
+        if (!raw) continue;
+        raw = stripFrontmatter(raw);
+        if (name === 'MEMORY.md') {
+          const lines = raw.split('\n');
+          if (lines.length > MEMORY_MAX_LINES) {
+            raw = lines.slice(0, MEMORY_MAX_LINES).join('\n') + `\n\n<!-- truncated at ${MEMORY_MAX_LINES} lines (${lines.length} total). Prune stale entries to stay under the cap. -->`;
+          }
         }
+        files[name] = raw;
       } catch {
         // skip unreadable files
       }
@@ -97,6 +106,7 @@ const DEFAULT_USER = `# User Profile
 export function ensureWorkspace(dir?: string): void {
   const wsDir = dir || WORKSPACE_DIR;
   mkdirSync(wsDir, { recursive: true });
+  mkdirSync(MEMORIES_DIR, { recursive: true });
 
   const soulPath = join(wsDir, 'SOUL.md');
   if (!existsSync(soulPath)) {
@@ -106,5 +116,38 @@ export function ensureWorkspace(dir?: string): void {
   const userPath = join(wsDir, 'USER.md');
   if (!existsSync(userPath)) {
     writeFileSync(userPath, DEFAULT_USER);
+  }
+}
+
+// get today's memory dir path
+export function getTodayMemoryDir(timezone?: string): string {
+  const now = new Date();
+  const dateStr = timezone
+    ? now.toLocaleDateString('en-CA', { timeZone: timezone }) // YYYY-MM-DD
+    : now.toISOString().slice(0, 10);
+  return join(MEMORIES_DIR, dateStr);
+}
+
+// load recent daily memories (last N days) for context
+export function loadRecentMemories(days = 3): { date: string; content: string }[] {
+  if (!existsSync(MEMORIES_DIR)) return [];
+
+  try {
+    const dirs = readdirSync(MEMORIES_DIR)
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort()
+      .slice(-days);
+
+    const entries: { date: string; content: string }[] = [];
+    for (const dir of dirs) {
+      const memPath = join(MEMORIES_DIR, dir, 'MEMORY.md');
+      if (existsSync(memPath)) {
+        const content = readFileSync(memPath, 'utf-8').trim();
+        if (content) entries.push({ date: dir, content });
+      }
+    }
+    return entries;
+  } catch {
+    return [];
   }
 }

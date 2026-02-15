@@ -277,7 +277,7 @@ const DEFAULT_TICK_MS = 30_000;
 
 export type SchedulerRunner = {
   stop: () => void;
-  addItem: (item: Omit<CalendarItem, 'id' | 'createdAt'>) => CalendarItem;
+  addItem: (item: Omit<CalendarItem, 'id' | 'createdAt'> & { id?: string }) => CalendarItem;
   updateItem: (id: string, updates: Partial<Omit<CalendarItem, 'id' | 'createdAt'>>) => CalendarItem | null;
   removeItem: (id: string) => boolean;
   listItems: () => CalendarItem[];
@@ -285,9 +285,15 @@ export type SchedulerRunner = {
   exportIcs: () => string;
 };
 
+export type SchedulerContext = {
+  connectedChannels?: { channel: string; chatId: string }[];
+  timezone?: string;
+};
+
 export function startScheduler(opts: {
   config: Config;
   tickIntervalMs?: number;
+  getContext?: () => SchedulerContext;
   onItemRun?: (item: CalendarItem, result: { status: string; result?: string }) => void;
 }): SchedulerRunner {
   const { config, onItemRun } = opts;
@@ -307,12 +313,15 @@ export function startScheduler(opts: {
 
   const executeItem = async (item: CalendarItem) => {
     try {
+      const ctx = opts.getContext?.() || {};
       const result = await runAgent({
         prompt: item.message,
         config: {
           ...config,
           model: item.model || config.model,
         },
+        connectedChannels: ctx.connectedChannels,
+        timezone: ctx.timezone,
       });
 
       item.lastRunAt = new Date().toISOString();
@@ -369,7 +378,7 @@ export function startScheduler(opts: {
     addItem: (data) => {
       const item: CalendarItem = {
         ...data,
-        id: generateItemId(),
+        id: data.id || generateItemId(),
         createdAt: new Date().toISOString(),
         enabled: data.enabled !== false,
       };
@@ -407,12 +416,15 @@ export function startScheduler(opts: {
       if (!item) return { status: 'not-found' };
 
       try {
+        const ctx = opts.getContext?.() || {};
         const result = await runAgent({
           prompt: item.message,
           config: {
             ...config,
             model: item.model || config.model,
           },
+          connectedChannels: ctx.connectedChannels,
+          timezone: ctx.timezone,
         });
 
         item.lastRunAt = new Date().toISOString();

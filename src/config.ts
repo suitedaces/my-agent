@@ -95,6 +95,8 @@ export type BrowserConfig = {
   headless?: boolean;
 };
 
+export type AutonomyMode = 'supervised' | 'autonomous';
+
 export type SecurityConfig = {
   approvalMode?: 'approve-sensitive' | 'autonomous' | 'lockdown';
   tools?: ToolPolicyConfig;
@@ -127,6 +129,7 @@ export type Config = {
   model: string;
   reasoningEffort?: ReasoningEffort;
   permissionMode: PermissionMode;
+  autonomy?: AutonomyMode;
   skills: {
     enabled: string[];
     disabled: string[];

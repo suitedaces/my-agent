@@ -32,6 +32,7 @@ import { isCodexInstalled, hasCodexAuth } from '../providers/codex.js';
 import type { ProviderName } from '../config.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { classifyToolCall, cleanToolName, isToolAllowed, type Tier } from './tool-policy.js';
+import { AUTONOMOUS_SCHEDULE_ID, buildAutonomousCalendarItem } from '../autonomous.js';
 
 const DEFAULT_PORT = 18789;
 const DEFAULT_HOST = '127.0.0.1';
@@ -650,11 +651,27 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
     migrateCronToCalendar();
     scheduler = startScheduler({
       config,
+      getContext: () => ({
+        connectedChannels: getAllChannelStatuses()
+          .filter(s => s.connected && ownerChatIds.has(s.channel))
+          .map(s => ({ channel: s.channel, chatId: ownerChatIds.get(s.channel)! })),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
       onItemRun: (item, result) => {
         broadcast({ event: 'calendar.result', data: { item: item.id, summary: item.summary, ...result, timestamp: Date.now() } });
       },
     });
     setScheduler(scheduler);
+
+    // auto-create autonomous schedule if mode is autonomous
+    if (config.autonomy === 'autonomous') {
+      const existing = scheduler.listItems().find(i => i.id === AUTONOMOUS_SCHEDULE_ID);
+      if (!existing) {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        scheduler.addItem({ ...buildAutonomousCalendarItem(tz), id: AUTONOMOUS_SCHEDULE_ID });
+        console.log('[gateway] created autonomous check-in schedule on startup');
+      }
+    }
   }
 
   const context: GatewayContext = {
@@ -2003,6 +2020,41 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
             if (!valid.includes(value)) return { id, error: `approvalMode must be one of: ${valid.join(', ')}` };
             if (!config.security) config.security = {};
             config.security.approvalMode = value as any;
+            saveConfig(config);
+            broadcast({ event: 'config.update', data: { key, value } });
+            return { id, result: { key, value } };
+          }
+
+          if (key === 'autonomy' && typeof value === 'string') {
+            const valid = ['supervised', 'autonomous'];
+            if (!valid.includes(value)) return { id, error: `autonomy must be one of: ${valid.join(', ')}` };
+            config.autonomy = value as any;
+
+            // sync permissionMode to match
+            if (value === 'autonomous') {
+              config.permissionMode = 'bypassPermissions';
+              if (!config.security) config.security = {};
+              config.security.approvalMode = 'autonomous';
+            } else {
+              config.permissionMode = 'default';
+              if (!config.security) config.security = {};
+              config.security.approvalMode = 'approve-sensitive';
+            }
+
+            // manage autonomous schedule
+            if (scheduler) {
+              const existing = scheduler.listItems().find(i => i.id === AUTONOMOUS_SCHEDULE_ID);
+              if (value === 'autonomous' && !existing) {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const item = buildAutonomousCalendarItem(tz);
+                scheduler.addItem({ ...item, id: AUTONOMOUS_SCHEDULE_ID });
+                console.log('[gateway] created autonomous check-in schedule');
+              } else if (value === 'supervised' && existing) {
+                scheduler.removeItem(AUTONOMOUS_SCHEDULE_ID);
+                console.log('[gateway] removed autonomous check-in schedule');
+              }
+            }
+
             saveConfig(config);
             broadcast({ event: 'config.update', data: { key, value } });
             return { id, result: { key, value } };

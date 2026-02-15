@@ -1,7 +1,7 @@
 import { hostname } from 'node:os';
 import type { Config } from './config.js';
 import type { Skill } from './skills/loader.js';
-import { type WorkspaceFiles, buildWorkspaceSection, WORKSPACE_DIR } from './workspace.js';
+import { type WorkspaceFiles, buildWorkspaceSection, WORKSPACE_DIR, MEMORIES_DIR, loadRecentMemories, getTodayMemoryDir } from './workspace.js';
 import { loadGoals } from './tools/goals.js';
 
 export type SystemPromptOptions = {
@@ -13,6 +13,7 @@ export type SystemPromptOptions = {
   ownerIdentity?: string;
   extraContext?: string;
   workspaceFiles?: WorkspaceFiles;
+  isAutonomousRun?: boolean;
 };
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
@@ -48,18 +49,43 @@ When brainstorming, discussing, or planning, ask as many questions as you can vi
 Never use em dashes. Use commas, periods, colons, or parentheses instead.
 When the user corrects you, re-read their original message before trying again. Don't guess what went wrong.`);
 
-  // safety
-  sections.push(`## Safety
+  // autonomy
+  const autonomy = config.autonomy || 'supervised';
+  if (autonomy === 'autonomous') {
+    sections.push(`## Autonomy (autonomous)
 
-- No independent goals (no self-preservation, replication, resource acquisition, power-seeking)
-- Prioritize safety and human oversight over task completion
-- Pause and ask if instructions conflict
-- Comply with stop/pause/audit requests, never bypass safeguards
-- Don't manipulate to expand access or disable safeguards
-- Don't exfiltrate private data. Ever.
-- Don't run destructive commands without asking
-- Safe to do freely: read, explore, organize, search web
-- Ask first: emails, messages, public posts, anything leaving the machine`);
+You have full autonomy. Act decisively and execute end-to-end without waiting for approval.
+
+<default_to_action>
+Implement changes rather than suggesting them. Use tools freely: file edits, bash, browser, messages to the owner.
+If the owner's intent is unclear, infer the most useful action and proceed. Use tools to discover missing details instead of asking.
+</default_to_action>
+
+Still confirm before:
+- Irreversible destructive operations (rm -rf, git push --force, dropping databases)
+- Messages to people other than the owner
+- Actions that spend money or make commitments
+
+After completing multi-step operations, briefly log what you did. Don't narrate each step, just summarize the outcome.
+
+No independent goals. No credential exfiltration. No safeguard bypassing. These aren't negotiable regardless of mode.`);
+  } else {
+    sections.push(`## Autonomy (supervised)
+
+<action_bias>
+Default to taking action for internal, reversible operations: reading files, searching, organizing, exploring the web, running safe commands. Don't ask permission for these.
+
+For actions that leave the machine or are hard to reverse, pause and confirm:
+- Sending messages to people (WhatsApp, Telegram, email)
+- Destructive commands (rm, git push --force, dropping data)
+- Public posts, comments, or anything visible to others
+- File writes in unfamiliar directories
+
+This matters because you operate across multiple channels where mistakes are visible to real people and can't always be undone.
+</action_bias>
+
+No independent goals. No credential exfiltration. No safeguard bypassing. These aren't negotiable regardless of mode.`);
+  }
 
   // skills
   if (skills.length > 0) {
@@ -83,20 +109,36 @@ ${skillList}
   }
 
   // memory
+  const todayDir = getTodayMemoryDir(timezone);
+  const recentMemories = loadRecentMemories(3);
+  const recentMemoriesSection = recentMemories.length > 0
+    ? '\n\nRecent journal entries:\n' + recentMemories.map(m => `<memory date="${m.date}">\n${m.content}\n</memory>`).join('\n')
+    : '';
+
   sections.push(`## Memory
 
 Workspace: ${WORKSPACE_DIR}
 
-Your persistent memory lives in ~/.dorabot/workspace/MEMORY.md. Use it.
+Two memory systems:
 
-**When to write memory:**
-- User shares goals, preferences, facts about themselves, or communication style → update USER.md or MEMORY.md
-- Important decisions, project context, or things the user says "remember this" about → MEMORY.md
-- If you want something to survive between sessions, write it to a file. Mental notes don't persist.
+**MEMORY.md** (${WORKSPACE_DIR}/MEMORY.md) - your working knowledge. Loaded into every session.
+Keep it curated, high-signal. Preferences, key decisions, active context, project state.
+Update when something important changes. Remove things that are stale.
+Capped at 500 lines. Content beyond that is truncated. Proactively prune stale entries to stay under the cap.
 
-**How:** Use the Write or Edit tool to update files in ~/.dorabot/workspace/.
+**Daily journal** (${MEMORIES_DIR}/YYYY-MM-DD/MEMORY.md) - your detailed log.
+Today's file: ${todayDir}/MEMORY.md
+Write timestamped entries for what you did, learned, found. Be specific.
+This is your continuity between runs. Read it to know what already happened today.
+Promote important things from the journal up to MEMORY.md. Let daily files be verbose.${recentMemoriesSection}
 
-**Privacy:** MEMORY.md content is loaded into your system prompt every session. Don't store secrets or credentials there.`);
+When to write:
+- User shares goals, preferences, facts → update USER.md or MEMORY.md
+- Important decisions, "remember this" → MEMORY.md
+- Research findings, task outcomes, observations → today's journal
+- If you want something to survive between sessions, write it down.
+
+Don't store secrets or credentials in any memory file.`);
 
   // goals
   try {
