@@ -898,10 +898,23 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
         }
       },
       runItem: async (item, _cfg, ctx) => {
-        const sessionKey = `calendar:dm:${item.id}`;
+        const session = sessionRegistry.getOrCreate({
+          channel: 'calendar',
+          chatId: item.id,
+          chatType: 'dm',
+        });
+        fileSessionManager.setMetadata(session.sessionId, {
+          channel: 'calendar',
+          chatId: item.id,
+          chatType: 'dm',
+          senderName: item.summary,
+        });
+        sessionRegistry.incrementMessages(session.key);
+        broadcastSessionUpdate(session.key);
+
         const result = await handleAgentRun({
           prompt: item.message,
-          sessionKey,
+          sessionKey: session.key,
           source: `calendar/${item.id}`,
           extraContext: ctx.timezone ? `User timezone: ${ctx.timezone}` : undefined,
         });
@@ -1565,6 +1578,11 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
               const allTools = [...tl.completed.map(t => t.name), tl.current?.name].filter(Boolean);
               if (allTools.some(t => t?.startsWith('goals_') || t?.startsWith('mcp__dorabot-tools__goals_'))) {
                 broadcast({ event: 'goals.update', data: {} });
+                macNotify('Dora', 'Goals updated');
+              }
+              if (allTools.some(t => t?.startsWith('research_') || t?.startsWith('mcp__dorabot-tools__research_'))) {
+                broadcast({ event: 'research.update', data: {} });
+                macNotify('Dora', 'Research updated');
               }
             }
 
@@ -2182,6 +2200,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           goals.tasks.push(task);
           saveGoals(goals);
           broadcast({ event: 'goals.update', data: {} });
+          macNotify('Dora', `Goal added: ${task.title}`);
           return { id, result: task };
         }
 
@@ -2202,6 +2221,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (task.status === 'done') task.completedAt = now;
           saveGoals(goals);
           broadcast({ event: 'goals.update', data: {} });
+          macNotify('Dora', `Goal updated: ${task.title}`);
           return { id, result: task };
         }
 
@@ -2214,6 +2234,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (goals.tasks.length === before) return { id, error: 'task not found' };
           saveGoals(goals);
           broadcast({ event: 'goals.update', data: {} });
+          macNotify('Dora', `Goal deleted: #${taskId}`);
           return { id, result: { deleted: true } };
         }
 
@@ -2229,6 +2250,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           if (status === 'done') task.completedAt = task.updatedAt;
           saveGoals(goals);
           broadcast({ event: 'goals.update', data: {} });
+          macNotify('Dora', `Goal moved: ${task.title} → ${status}`);
           return { id, result: task };
         }
 
@@ -2263,6 +2285,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           item.updatedAt = new Date().toISOString();
           saveResearch(research);
           broadcast({ event: 'research.update', data: {} });
+          macNotify('Dora', `Research updated: ${item.title}`);
           return { id, result: item };
         }
 
@@ -2277,6 +2300,7 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
           // clean up file
           try { if (existsSync(deleted.filePath)) unlinkSync(deleted.filePath); } catch {}
           broadcast({ event: 'research.update', data: {} });
+          macNotify('Dora', `Research deleted: ${deleted.title}`);
           return { id, result: { deleted: true } };
         }
 

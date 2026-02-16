@@ -38,6 +38,7 @@ export function Automations({ gateway }: AutomationsProps) {
   const [pulse, setPulse] = useState<PulseStatus>({ enabled: false, interval: '30m', lastRunAt: null, nextRunAt: null });
   const [pulseLoading, setPulseLoading] = useState(false);
   const [pulseRunning, setPulseRunning] = useState(false);
+  const [pulseRunStartedAt, setPulseRunStartedAt] = useState<number | null>(null);
   const [newItem, setNewItem] = useState({
     summary: '',
     message: '',
@@ -83,6 +84,16 @@ export function Automations({ gateway }: AutomationsProps) {
     }
   }, [gateway.calendarRuns, loadPulseStatus]);
 
+  useEffect(() => {
+    if (!pulseRunning || !pulseRunStartedAt) return;
+    const completed = gateway.calendarRuns.some(
+      run => run.item === PULSE_SCHEDULE_ID && run.timestamp >= pulseRunStartedAt,
+    );
+    if (!completed) return;
+    setPulseRunning(false);
+    setPulseRunStartedAt(null);
+  }, [gateway.calendarRuns, pulseRunning, pulseRunStartedAt]);
+
   const togglePulse = async () => {
     setPulseLoading(true);
     try {
@@ -111,14 +122,12 @@ export function Automations({ gateway }: AutomationsProps) {
   const runPulseNow = async () => {
     try {
       setPulseRunning(true);
+      setPulseRunStartedAt(Date.now());
       await gateway.rpc('cron.run', { id: PULSE_SCHEDULE_ID });
-      setTimeout(() => {
-        loadPulseStatus();
-        setPulseRunning(false);
-      }, 2000);
     } catch (err) {
       console.error('failed to run pulse:', err);
       setPulseRunning(false);
+      setPulseRunStartedAt(null);
     }
   };
 

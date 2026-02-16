@@ -115,6 +115,7 @@ export type GatewayEventName =
   | 'session.update'
   | 'status.update'
   | 'goals.update'
+  | 'research.update'
   | 'background.status'
   | 'fs.change'
   | 'agent.status'

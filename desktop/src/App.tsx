@@ -80,6 +80,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const onboardingCheckedRef = useRef(false);
   const focusInputOnGroupSwitch = useRef(false);
+  const notifCooldownRef = useRef<Record<string, number>>({});
   const gw = useGateway();
   const layout = useLayout();
   const tabState = useTabs(gw, layout);
@@ -172,6 +173,13 @@ export default function App() {
   useEffect(() => {
     gw.onNotifiableEventRef.current = (event: NotifiableEvent) => {
       const windowFocused = document.hasFocus();
+      const now = Date.now();
+      const allowPing = (key: string, cooldownMs = 4000) => {
+        const last = notifCooldownRef.current[key] || 0;
+        if (now - last < cooldownMs) return false;
+        notifCooldownRef.current[key] = now;
+        return true;
+      };
 
       switch (event.type) {
         case 'agent.result': {
@@ -194,6 +202,22 @@ export default function App() {
           toast('calendar event', { description: event.summary, duration: 5000 });
           if (!windowFocused) {
             new Notification('dorabot', { body: `calendar: ${event.summary}` });
+            playNotifSound();
+          }
+          break;
+        case 'goals.update':
+          if (!allowPing('goals.update')) break;
+          toast('goals updated', { description: 'new goal activity', duration: 4000 });
+          if (!windowFocused) {
+            new Notification('dorabot', { body: 'goals updated' });
+            playNotifSound();
+          }
+          break;
+        case 'research.update':
+          if (!allowPing('research.update')) break;
+          toast('research updated', { description: 'new research activity', duration: 4000 });
+          if (!windowFocused) {
+            new Notification('dorabot', { body: 'research updated' });
             playNotifSound();
           }
           break;

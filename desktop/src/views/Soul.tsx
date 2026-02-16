@@ -13,6 +13,7 @@ type Props = {
 };
 
 const WORKSPACE_DIR = '~/.dorabot/workspace';
+const MEMORIES_DIR = `${WORKSPACE_DIR}/memories`;
 
 const FILES = [
   { name: 'SOUL.md', label: 'Soul', icon: Sparkles, description: 'personality, tone, behavior guidelines' },
@@ -28,6 +29,12 @@ type FileState = {
   error: string | null;
 };
 
+type FileEntry = {
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+};
+
 const SETUP_PROMPTS: Record<string, string> = {
   'SOUL.md': 'Help me set up my agent\'s personality. Ask me about the tone, style, and behavior I want, then write it to ~/.dorabot/workspace/SOUL.md',
   'USER.md': 'Help me create my user profile. Ask me about myself — my name, what I do, my preferences — then write it to ~/.dorabot/workspace/USER.md',
@@ -39,6 +46,11 @@ export function SoulView({ gateway, onSetupChat }: Props) {
   const [files, setFiles] = useState<Record<string, FileState>>({});
   const [activeFile, setActiveFile] = useState<(typeof FILES)[number]['name']>(FILES[0].name);
   const [editing, setEditing] = useState(false);
+  const [journalDates, setJournalDates] = useState<string[]>([]);
+  const [selectedJournalDate, setSelectedJournalDate] = useState<string | null>(null);
+  const [selectedJournalContent, setSelectedJournalContent] = useState('');
+  const [journalLoading, setJournalLoading] = useState(false);
+  const [journalContentLoading, setJournalContentLoading] = useState(false);
 
   const loadFile = useCallback(async (name: string) => {
     setFiles(prev => ({
@@ -83,6 +95,52 @@ export function SoulView({ gateway, onSetupChat }: Props) {
     if (disabled) return;
     for (const f of FILES) loadFile(f.name);
   }, [disabled, loadFile]);
+
+  const loadJournalDates = useCallback(async () => {
+    if (disabled) return;
+    setJournalLoading(true);
+    try {
+      const entries = await gateway.rpc('fs.list', { path: MEMORIES_DIR }) as FileEntry[];
+      const dates = (entries || [])
+        .filter(e => e.type === 'directory' && /^\d{4}-\d{2}-\d{2}$/.test(e.name))
+        .map(e => e.name)
+        .sort((a, b) => b.localeCompare(a));
+      setJournalDates(dates);
+      setSelectedJournalDate(prev => (prev && dates.includes(prev) ? prev : (dates[0] || null)));
+    } catch {
+      setJournalDates([]);
+      setSelectedJournalDate(null);
+    } finally {
+      setJournalLoading(false);
+    }
+  }, [gateway.rpc, disabled]);
+
+  useEffect(() => {
+    if (activeFile !== 'MEMORY.md' || disabled) return;
+    loadJournalDates();
+  }, [activeFile, disabled, loadJournalDates]);
+
+  useEffect(() => {
+    if (!selectedJournalDate || activeFile !== 'MEMORY.md' || disabled) {
+      setSelectedJournalContent('');
+      return;
+    }
+    let cancelled = false;
+    setJournalContentLoading(true);
+    gateway.rpc('fs.read', { path: `${MEMORIES_DIR}/${selectedJournalDate}/MEMORY.md` })
+      .then((res) => {
+        if (cancelled) return;
+        const content = (res as { content?: string })?.content || '';
+        setSelectedJournalContent(content);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedJournalContent('');
+      })
+      .finally(() => {
+        if (!cancelled) setJournalContentLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedJournalDate, activeFile, gateway.rpc, disabled]);
 
   const file = files[activeFile];
   const isDirty = file && file.content !== file.original;
@@ -221,6 +279,61 @@ export function SoulView({ gateway, onSetupChat }: Props) {
               </Button>
             </div>
           </div>
+        ) : activeFile === 'MEMORY.md' ? (
+          <ResizablePanelGroup orientation="vertical">
+            <ResizablePanel defaultSize="58%" minSize="30%">
+              <ScrollArea className="h-full">
+                <div className="markdown-viewer p-4 text-[12px]">
+                  <ReactMarkdown>{file.content}</ReactMarkdown>
+                </div>
+              </ScrollArea>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize="42%" minSize="20%">
+              <div className="h-full min-h-0 flex flex-col">
+                <div className="px-4 py-2 border-b border-border flex items-center gap-2">
+                  <span className="text-[11px] font-medium">Daily journal</span>
+                  {journalLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                  <span className="text-[10px] text-muted-foreground ml-auto">{journalDates.length}</span>
+                </div>
+                <div className="flex-1 min-h-0 grid grid-cols-[160px_1fr]">
+                  <ScrollArea className="border-r border-border">
+                    <div className="p-1">
+                      {journalDates.length === 0 ? (
+                        <div className="text-[11px] text-muted-foreground px-2 py-2">no daily entries</div>
+                      ) : (
+                        journalDates.map(date => (
+                          <button
+                            key={date}
+                            onClick={() => setSelectedJournalDate(date)}
+                            className={`w-full text-left px-2 py-1 rounded text-[11px] transition-colors ${
+                              selectedJournalDate === date
+                                ? 'bg-secondary text-foreground'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                            }`}
+                          >
+                            {date}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                  <ScrollArea className="h-full">
+                    {journalContentLoading ? (
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground p-3">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        loading journal...
+                      </div>
+                    ) : (
+                      <div className="markdown-viewer p-3 text-[12px]">
+                        <ReactMarkdown>{selectedJournalContent || '_No content for this day._'}</ReactMarkdown>
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         ) : (
           <ScrollArea className="h-full">
             <div className="markdown-viewer p-4 text-[12px]">

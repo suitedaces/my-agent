@@ -158,6 +158,7 @@ export type NotifiableEvent =
   | { type: 'agent.error'; sessionKey: string; error: string }
   | { type: 'tool_approval'; toolName: string }
   | { type: 'goals.update' }
+  | { type: 'research.update' }
   | { type: 'whatsapp.status'; status: string }
   | { type: 'telegram.status'; status: string }
   | { type: 'calendar'; summary: string };
@@ -1015,6 +1016,7 @@ export function useGateway(url = 'wss://localhost:18789') {
 
       case 'research.update': {
         setResearchVersion(v => v + 1);
+        onNotifiableEventRef.current?.({ type: 'research.update' });
         break;
       }
 

@@ -64,6 +64,7 @@ Three different stores, three different purposes:
 - Log what you did to ${todayDir}/MEMORY.md with a timestamp.
 - If you gathered real findings, store them via research_add (not in memory files).
 - If stable facts changed (user preferences, key context), update ${WORKSPACE_DIR}/MEMORY.md.
+- If you created/updated/deleted goals or research, send the owner a concise update on an available channel (what changed, why it matters, and suggested next action).
 - If something is urgent or the owner would want to know, message them on an available channel.
 
 ## Boundaries
