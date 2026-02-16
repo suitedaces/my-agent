@@ -22,6 +22,7 @@ const electronAPI = {
   },
   openExternal: (url: string) => shell.openExternal(url),
   dockBounce: (type: 'critical' | 'informational') => ipcRenderer.send('dock-bounce', type),
+  notify: (title: string, body: string) => ipcRenderer.send('notify', { title, body }),
   onCloseTab: (cb: () => void) => {
     ipcRenderer.on('close-tab', cb);
     return () => { ipcRenderer.removeListener('close-tab', cb); };

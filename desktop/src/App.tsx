@@ -88,6 +88,17 @@ export default function App() {
   const [draggingTab, setDraggingTab] = useState<Tab | null>(null);
   const { theme, toggle: toggleTheme } = useTheme();
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' });
+  const notify = useCallback((body: string) => {
+    const api = (window as any).electronAPI;
+    if (api?.notify) {
+      api.notify('dorabot', body);
+      return;
+    }
+    try {
+      const icon = new URL(dorabotImg, window.location.href).toString();
+      new Notification('dorabot', { body, icon });
+    } catch {}
+  }, []);
 
   // Auto-update listener
   useEffect(() => {
@@ -184,7 +195,7 @@ export default function App() {
       switch (event.type) {
         case 'agent.result': {
           if (!windowFocused) {
-            new Notification('dorabot', { body: 'agent finished' });
+            notify('agent finished');
             (window as any).electronAPI?.dockBounce?.('informational');
             playNotifSound();
           }
@@ -193,7 +204,7 @@ export default function App() {
         case 'tool_approval':
           toast.warning('approval needed', { description: event.toolName, duration: 10000 });
           if (!windowFocused) {
-            new Notification('dorabot', { body: `approve tool: ${event.toolName}` });
+            notify(`approve tool: ${event.toolName}`);
           }
           (window as any).electronAPI?.dockBounce?.('critical');
           playNotifSound();
@@ -201,7 +212,7 @@ export default function App() {
         case 'calendar':
           toast('calendar event', { description: event.summary, duration: 5000 });
           if (!windowFocused) {
-            new Notification('dorabot', { body: `calendar: ${event.summary}` });
+            notify(`calendar: ${event.summary}`);
             playNotifSound();
           }
           break;
@@ -209,7 +220,7 @@ export default function App() {
           if (!allowPing('goals.update')) break;
           toast('goals updated', { description: 'new goal activity', duration: 4000 });
           if (!windowFocused) {
-            new Notification('dorabot', { body: 'goals updated' });
+            notify('goals updated');
             playNotifSound();
           }
           break;
@@ -217,14 +228,14 @@ export default function App() {
           if (!allowPing('research.update')) break;
           toast('research updated', { description: 'new research activity', duration: 4000 });
           if (!windowFocused) {
-            new Notification('dorabot', { body: 'research updated' });
+            notify('research updated');
             playNotifSound();
           }
           break;
       }
     };
     return () => { gw.onNotifiableEventRef.current = null; };
-  }, [gw.onNotifiableEventRef]);
+  }, [gw.onNotifiableEventRef, notify]);
 
   const filteredSessions = useMemo(() => {
     if (sessionFilter === 'all') return gw.sessions;

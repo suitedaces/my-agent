@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, session, ipcMain } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, session, ipcMain, Notification as ElectronNotification } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { is } from '@electron-toolkit/utils';
 import * as path from 'path';
@@ -75,6 +75,19 @@ function getIconPath(): string {
   return is.dev
     ? path.join(__dirname, '../../public/dorabot.png')
     : path.join(__dirname, '../renderer/dorabot.png');
+}
+
+function showAppNotification(title: string, body: string): void {
+  try {
+    if (!ElectronNotification.isSupported()) return;
+    new ElectronNotification({
+      title,
+      body,
+      icon: getIconPath(),
+    }).show();
+  } catch (err) {
+    console.error('[main] Notification failed:', err);
+  }
 }
 
 function createWindow(): void {
@@ -223,6 +236,12 @@ app.on('ready', async () => {
     if (app.dock) {
       app.dock.bounce(type);
     }
+  });
+  ipcMain.on('notify', (_event, payload: { title?: string; body?: string } | undefined) => {
+    const title = payload?.title?.trim() || 'dorabot';
+    const body = payload?.body?.trim() || '';
+    if (!body) return;
+    showAppNotification(title, body);
   });
 });
 

@@ -190,6 +190,11 @@ export async function startWhatsAppMonitor(opts: WhatsAppMonitorOptions): Promis
             }
           }
 
+          // quoted message body when replying, if available
+          // keeps enough context to recover pulse session markers from replies
+          const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage as any;
+          const replyToBody = quoted?.conversation || quoted?.extendedTextMessage?.text || undefined;
+
           const inbound: InboundMessage = {
             id: msg.key.id || `wa-${Date.now()}`,
             channel: 'whatsapp',
@@ -201,6 +206,7 @@ export async function startWhatsAppMonitor(opts: WhatsAppMonitorOptions): Promis
             body: text,
             timestamp: (msg.messageTimestamp as number) * 1000 || Date.now(),
             replyToId: msg.message?.extendedTextMessage?.contextInfo?.stanzaId || undefined,
+            replyToBody,
             raw: msg,
           };
 

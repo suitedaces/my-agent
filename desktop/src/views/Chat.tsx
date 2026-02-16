@@ -60,6 +60,9 @@ const TOOL_TEXT: Record<string, { pending: string; done: string }> = {
   goals_add: { pending: 'Adding goal', done: 'Added goal' },
   goals_update: { pending: 'Updating goal', done: 'Updated goal' },
   goals_propose: { pending: 'Proposing goals', done: 'Proposed goals' },
+  research_view: { pending: 'Viewing research', done: 'Viewed research' },
+  research_add: { pending: 'Adding research', done: 'Added research' },
+  research_update: { pending: 'Updating research', done: 'Updated research' },
 };
 
 function toolText(name: string, state: 'pending' | 'done'): string {
@@ -77,6 +80,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   schedule_cron: Clock, list_reminders: Clock, cancel_reminder: Clock,
   goals_view: LayoutGrid, goals_add: LayoutGrid,
   goals_update: LayoutGrid, goals_propose: LayoutGrid,
+  research_view: FileSearch, research_add: FilePlus, research_update: Pencil,
 };
 
 const ANTHROPIC_MODELS = [

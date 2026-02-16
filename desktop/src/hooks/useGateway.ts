@@ -26,6 +26,7 @@ const TOOL_PENDING_TEXT: Record<string, string> = {
   screenshot: 'taking screenshot', browser: 'using browser',
   schedule: 'scheduling', list_schedule: 'listing schedule',
   update_schedule: 'updating schedule', cancel_schedule: 'cancelling schedule',
+  research_view: 'viewing research', research_add: 'adding research', research_update: 'updating research',
 };
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';

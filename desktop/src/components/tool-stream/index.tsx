@@ -10,6 +10,7 @@ import { CronStream } from "./CronStream"
 import { GoalsStream } from "./GoalsStream"
 import { WebFetchStream } from "./WebFetchStream"
 import { TaskStream } from "./TaskStream"
+import { ResearchStream } from "./ResearchStream"
 
 const STREAM_MAP: Record<string, React.ComponentType<ToolUIProps>> = {
   browser: BrowserStream,
@@ -29,6 +30,9 @@ const STREAM_MAP: Record<string, React.ComponentType<ToolUIProps>> = {
   goals_add: GoalsStream,
   goals_update: GoalsStream,
   goals_propose: GoalsStream,
+  research_view: ResearchStream,
+  research_add: ResearchStream,
+  research_update: ResearchStream,
   // TodoWrite and AskUserQuestion handled inline — not as stream cards
 }
 

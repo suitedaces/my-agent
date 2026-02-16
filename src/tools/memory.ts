@@ -1,16 +1,63 @@
 import { z } from 'zod';
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { getDb, extractMessageText } from '../db.js';
+import { AUTONOMOUS_SCHEDULE_ID } from '../autonomous.js';
+
+const MEMORY_ORIGINS = [
+  'pulse',
+  'scheduled_task',
+  'desktop_user',
+  'telegram_user',
+  'whatsapp_user',
+  'user_initiated',
+] as const;
+
+type MemoryOrigin = (typeof MEMORY_ORIGINS)[number];
+
+function classifySessionOrigin(channel?: string | null, chatId?: string | null): MemoryOrigin | 'other' {
+  if (channel === 'calendar') {
+    return (chatId || '').startsWith(AUTONOMOUS_SCHEDULE_ID) ? 'pulse' : 'scheduled_task';
+  }
+  if (channel === 'desktop') return 'desktop_user';
+  if (channel === 'telegram') return 'telegram_user';
+  if (channel === 'whatsapp') return 'whatsapp_user';
+  return 'other';
+}
+
+function originFilterSql(origin: MemoryOrigin): { clause: string; params: unknown[] } {
+  switch (origin) {
+    case 'pulse':
+      return {
+        clause: '(s.channel = ? AND s.chat_id LIKE ?)',
+        params: ['calendar', `${AUTONOMOUS_SCHEDULE_ID}%`],
+      };
+    case 'scheduled_task':
+      return {
+        clause: '(s.channel = ? AND (s.chat_id IS NULL OR s.chat_id NOT LIKE ?))',
+        params: ['calendar', `${AUTONOMOUS_SCHEDULE_ID}%`],
+      };
+    case 'desktop_user':
+      return { clause: 's.channel = ?', params: ['desktop'] };
+    case 'telegram_user':
+      return { clause: 's.channel = ?', params: ['telegram'] };
+    case 'whatsapp_user':
+      return { clause: 's.channel = ?', params: ['whatsapp'] };
+    case 'user_initiated':
+      return { clause: "s.channel IN ('desktop','telegram','whatsapp')", params: [] };
+  }
+}
 
 // ── memory_search: FTS5 search over all past conversations ──
 
 export const memorySearchTool = tool(
   'memory_search',
-  'Search your past conversations and memory. Uses full-text search across all messages (user, assistant, tool calls, tool results). Returns ranked snippets with session context. Use this to recall what was discussed, find past decisions, look up tool outputs, etc.',
+  'Search your past conversations and memory. Uses full-text search across all messages (user, assistant, tool calls, tool results). Returns ranked snippets with session context and origin labels (pulse, scheduled task, desktop user, telegram user, etc).',
   {
     query: z.string().describe('Search query. Supports FTS5 syntax: simple words, "exact phrase", word1 OR word2, word1 AND word2, word1 NOT word2'),
     limit: z.number().optional().describe('Max results to return (default 20, max 50)'),
     channel: z.string().optional().describe('Filter by channel: desktop, telegram, whatsapp, slack'),
+    origin: z.enum(MEMORY_ORIGINS).optional()
+      .describe('Filter by conversation origin: pulse, scheduled_task, desktop_user, telegram_user, whatsapp_user, user_initiated'),
     type: z.enum(['user', 'assistant', 'result']).optional().describe('Filter by message type'),
     after: z.string().optional().describe('Only messages after this date (ISO 8601 or YYYY-MM-DD)'),
     before: z.string().optional().describe('Only messages before this date (ISO 8601 or YYYY-MM-DD)'),
@@ -32,6 +79,7 @@ export const memorySearchTool = tool(
           m.timestamp,
           m.content,
           s.channel,
+          s.chat_id,
           s.sender_name,
           f.rank
         FROM messages_fts f
@@ -44,6 +92,11 @@ export const memorySearchTool = tool(
       if (args.channel) {
         sql += ' AND s.channel = ?';
         params.push(args.channel);
+      }
+      if (args.origin) {
+        const { clause, params: originParams } = originFilterSql(args.origin);
+        sql += ` AND ${clause}`;
+        params.push(...originParams);
       }
       if (args.type) {
         sql += ' AND m.type = ?';
@@ -68,6 +121,7 @@ export const memorySearchTool = tool(
         timestamp: string;
         content: string;
         channel: string | null;
+        chat_id: string | null;
         sender_name: string | null;
         rank: number;
       }[];
@@ -81,8 +135,10 @@ export const memorySearchTool = tool(
         // truncate long results for readability
         const preview = text.length > 500 ? text.slice(0, 500) + '...' : text;
         const channel = row.channel ? ` [${row.channel}]` : '';
+        const origin = classifySessionOrigin(row.channel, row.chat_id);
+        const originTag = ` [origin:${origin}]`;
         const date = row.timestamp.slice(0, 16).replace('T', ' ');
-        return `${i + 1}. [${row.type}]${channel} ${date} (session: ${row.session_id})\n${preview}`;
+        return `${i + 1}. [${row.type}]${channel}${originTag} ${date} (session: ${row.session_id})\n${preview}`;
       });
 
       return {
@@ -112,7 +168,7 @@ export const memorySearchTool = tool(
 
 export const memoryReadTool = tool(
   'memory_read',
-  'Read a past conversation by session ID, with pagination. Returns the full message flow (user messages, assistant responses, tool calls, tool results) in chronological order. Use memory_search first to find relevant sessions, then memory_read to read the full conversation.',
+  'Read a past conversation by session ID, with pagination. Returns the full message flow (user messages, assistant responses, tool calls, tool results) and origin classification.',
   {
     session_id: z.string().describe('Session ID to read (get this from memory_search results or session list)'),
     page: z.number().optional().describe('Page number, 1-indexed (default 1)'),
@@ -128,9 +184,9 @@ export const memoryReadTool = tool(
     const types = args.types || ['user', 'assistant', 'result'];
 
     // get session info
-    const session = db.prepare('SELECT id, channel, chat_type, sender_name, created_at, updated_at FROM sessions WHERE id = ?')
+    const session = db.prepare('SELECT id, channel, chat_id, chat_type, sender_name, created_at, updated_at FROM sessions WHERE id = ?')
       .get(args.session_id) as {
-        id: string; channel: string | null; chat_type: string | null;
+        id: string; channel: string | null; chat_id: string | null; chat_type: string | null;
         sender_name: string | null; created_at: string | null; updated_at: string | null;
       } | undefined;
 
@@ -177,9 +233,11 @@ export const memoryReadTool = tool(
 
     // format header
     const channel = session.channel ? ` | channel: ${session.channel}` : '';
+    const origin = classifySessionOrigin(session.channel, session.chat_id);
+    const originLabel = ` | origin: ${origin}`;
     const sender = session.sender_name ? ` | sender: ${session.sender_name}` : '';
     const created = session.created_at ? session.created_at.slice(0, 16).replace('T', ' ') : 'unknown';
-    const header = `Session: ${session.id}${channel}${sender}\nCreated: ${created} | Messages: ${total} | Page ${page}/${totalPages}`;
+    const header = `Session: ${session.id}${channel}${originLabel}${sender}\nCreated: ${created} | Messages: ${total} | Page ${page}/${totalPages}`;
 
     // format messages
     const formatted = rows.map(row => {

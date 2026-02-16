@@ -148,6 +148,10 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
   }
 
   function buildInbound(msg: any, isGroup: boolean, body: string): InboundMessage {
+    const replyMsg = msg.reply_to_message;
+    const replyToBody = replyMsg
+      ? (replyMsg.text || replyMsg.caption || undefined)
+      : undefined;
     return {
       id: String(msg.message_id),
       channel: 'telegram',
@@ -161,6 +165,7 @@ export async function startTelegramMonitor(opts: TelegramMonitorOptions): Promis
       body,
       timestamp: msg.date * 1000,
       replyToId: msg.reply_to_message ? String(msg.reply_to_message.message_id) : undefined,
+      replyToBody,
       raw: msg,
     };
   }

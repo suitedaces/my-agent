@@ -187,12 +187,14 @@ export function migrateCronToCalendar(): void {
   const oldRows = db.prepare('SELECT data FROM cron_jobs').all() as { data: string }[];
   if (oldRows.length === 0) return;
 
-  // check if we already migrated (calendar_items has data)
-  const existing = db.prepare('SELECT COUNT(*) as count FROM calendar_items').get() as { count: number };
-  if (existing.count > 0) return;
+  // backfill any cron jobs that are missing in calendar_items
+  const existingRows = db.prepare('SELECT id FROM calendar_items').all() as { id: string }[];
+  const existingIds = new Set(existingRows.map(r => r.id));
+  let migrated = 0;
 
   for (const row of oldRows) {
     const old = JSON.parse(row.data) as Record<string, any>;
+    if (existingIds.has(old.id)) continue;
 
     let dtstart: string;
     if (old.at) {
@@ -226,9 +228,13 @@ export function migrateCronToCalendar(): void {
     };
 
     insertCalendarItem(item);
+    existingIds.add(item.id);
+    migrated++;
   }
 
-  console.log(`[calendar] migrated ${oldRows.length} cron jobs to calendar items`);
+  if (migrated > 0) {
+    console.log(`[calendar] migrated ${migrated} legacy cron jobs to calendar items`);
+  }
 }
 
 function convertCronToRrule(cron?: string): string | null {
